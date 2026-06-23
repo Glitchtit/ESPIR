@@ -1,13 +1,13 @@
 /*
- * ESPIR master — USB-powered Zigbee Router. Learns IR codes from a remote (via the
- * VS1838B receiver), stores them in NVS, transmits them on command, and exposes the
- * custom cluster 0xFC00 to Zigbee2MQTT / Home Assistant.
+ * ESPIR master — USB-powered Zigbee Router. Learns and transmits IR via a YS-IRTM NEC
+ * codec module over UART, stores codes in NVS, and exposes the custom cluster 0xFC00 to
+ * Zigbee2MQTT / Home Assistant. NEC-only (the YS-IRTM does not handle other protocols).
  */
 #include "esp_err.h"
 #include "esp_log.h"
 #include "sdkconfig.h"
 
-#include "espir_ir.h"
+#include "espir_irtm.h"
 #include "espir_store.h"
 #include "espir_device.h"
 
@@ -16,9 +16,13 @@ static const char *TAG = "espir-master";
 void app_main(void)
 {
     ESP_ERROR_CHECK(espir_store_init());
-    ESP_ERROR_CHECK(espir_ir_init(CONFIG_ESPIR_IR_TX_GPIO, CONFIG_ESPIR_IR_RX_GPIO));
-    ESP_LOGI(TAG, "ESPIR master: %d slots, tx=%d rx=%d",
-             espir_store_count(), CONFIG_ESPIR_IR_TX_GPIO, CONFIG_ESPIR_IR_RX_GPIO);
+    ESP_ERROR_CHECK(espir_irtm_init(CONFIG_ESPIR_IRTM_UART_NUM,
+                                    CONFIG_ESPIR_IRTM_TX_GPIO,
+                                    CONFIG_ESPIR_IRTM_RX_GPIO,
+                                    CONFIG_ESPIR_IRTM_BAUD));
+    ESP_LOGI(TAG, "ESPIR master: %d slots, YS-IRTM uart%d tx=%d rx=%d",
+             espir_store_count(), CONFIG_ESPIR_IRTM_UART_NUM,
+             CONFIG_ESPIR_IRTM_TX_GPIO, CONFIG_ESPIR_IRTM_RX_GPIO);
 
     espir_device_cfg_t cfg = {
         .role = ESPIR_ROLE_MASTER,

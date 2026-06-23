@@ -8,7 +8,7 @@ existing physical remotes and **replays** them on command, so HA buttons map 1:1
 ## Topology
 
 ```
-[remote] --IR--> [VS1838B] --RMT RX--> MASTER (DevKitC-1, USB, Zigbee Router)
+[remote] --IR--> [YS-IRTM] --UART--> MASTER (DevKitC-1, USB, Zigbee Router)
                                           |  NVS slots, custom ZCL cluster 0xFC00
                                           v
                        Zigbee <--> Z2M (z2m/espir.js) <--> Home Assistant
@@ -20,11 +20,16 @@ existing physical remotes and **replays** them on command, so HA buttons map 1:1
                        SLAVE (XIAO C6, LiPo, Sleepy End Device) --IR--> local appliance
 ```
 
-- **Master** (ESP32-C6-DevKitC-1, USB-powered Zigbee **Router**): learns codes via a
-  VS1838B receiver, stores them in NVS, and transmits at full 5 V range. Always-on, so it
-  responds instantly and extends the Zigbee mesh.
+- **Master** (ESP32-C6-DevKitC-1, USB-powered Zigbee **Router**): learns and transmits NEC
+  codes via a **YS-IRTM** UART codec module (its own emitter + receiver), stores them in
+  NVS. Always-on, so it responds instantly and extends the Zigbee mesh.
 - **Slave** (Seeed XIAO ESP32-C6, LiPo **Sleepy End Device**): transmit-only repeater for
-  coverage in another spot. Receives learned codes from the master via a replication path.
+  coverage in another spot, using the SZHJW dual-LED emitter (RMT). Receives learned codes
+  from the master via a replication path.
+
+> **Protocol note:** the YS-IRTM only handles **NEC-family** remotes, so the master learns
+> NEC only. Codes are stored as NEC `{address, command}`, which the RMT slaves re-encode and
+> blast — master and slaves stay interoperable.
 
 ## Why this design
 
@@ -37,12 +42,14 @@ to fire eventually at their own nearby appliance.
 
 | Path | What |
 |------|------|
-| `components/espir_ir`    | RMT IR transmit (software 38 kHz carrier) + raw receive |
+| `components/espir_irtm`  | YS-IRTM UART NEC codec driver (master IR backend) |
+| `components/espir_ir`    | RMT IR transmit (software 38 kHz carrier) + receive (slave IR backend) |
 | `components/espir_codec` | NEC decode/encode + raw↔compact helpers |
 | `components/espir_store` | NVS slot store (save/load/clear, chunked program) |
-| `components/espir_zcl`   | Custom ZCL cluster `0xFC00` — the shared device/host contract |
-| `master/`                | ESP-IDF app: receiver + transmitter + learn FSM (Router) |
-| `slave/`                 | ESP-IDF app: transmitter + program/send subset (Sleepy End Device) |
+| `components/espir_zcl`   | Custom ZCL cluster `0xFC00` contract (`espir_proto.h`) |
+| `components/espir_device`| Zigbee device: endpoint, cluster server, learn FSM (shared) |
+| `master/`                | ESP-IDF app: YS-IRTM learn + transmit (Router) |
+| `slave/`                 | ESP-IDF app: SZHJW transmit + program/send (Sleepy End Device) |
 | `z2m/espir.js`           | Zigbee2MQTT external converter (mirrors the cluster contract) |
 | `homeassistant/`         | Replication script + example button entities |
 | `hardware/`              | BOM and wiring diagrams |
@@ -55,28 +62,31 @@ be common. Full notes (caps, boost, battery sense) in
 [`hardware/wiring-master.md`](hardware/wiring-master.md) and
 [`hardware/wiring-slave.md`](hardware/wiring-slave.md).
 
-### Master — ESP32-C6-DevKitC-1 (USB powered)
+### Master — ESP32-C6-DevKitC-1 (USB powered) + YS-IRTM
+
+The master uses a **YS-IRTM** module: a self-contained NEC codec with its own IR emitter
+and receiver, talking **UART** (9600 8N1). It does both learn and transmit — no SZHJW or
+VS1838B on the master. (NEC-only; non-NEC remotes can't be learned here.)
 
 | Signal | C6 GPIO | Connects to |
 |--------|---------|-------------|
-| IR TX data | **GPIO5** | SZHJW `DAT` |
-| IR RX data | **GPIO4** | VS1838B `OUT` |
-| 5 V | `5V` pin | SZHJW `VCC` |
-| 3.3 V | `3V3` pin | VS1838B `VCC` — **3.3 V only** (output drives a GPIO) |
-| GND | any `GND` | SZHJW `GND` **and** VS1838B `GND` |
+| UART TX | **GPIO5** | YS-IRTM `RXD` |
+| UART RX | **GPIO4** | YS-IRTM `TXD` — **via a divider** (5 V → 3.3 V) |
+| 5 V | `5V` pin | YS-IRTM `5V` |
+| GND | any `GND` | YS-IRTM `GND` |
 
 ```
-DevKitC-1                         SZHJW IR TX (2× 940nm emitters)
-  5V    ──────────────────────────► VCC
-  GPIO5 ──────────────────────────► DAT
-  GND ──────────────┬─────────────► GND
-                    │
-  3V3 ──────────────┼─────────────► VCC   VS1838B receiver (3.3 V ONLY)
-  GPIO4 ◄───────────┼──────────────── OUT
-  GND ──────────────┴─────────────► GND
+DevKitC-1                         YS-IRTM (NEC codec, 5 V)
+  5V    ──────────────────────────► 5V
+  GPIO5 (TX) ────────────────────► RXD
+  GPIO4 (RX) ◄───[ 10k ]──┬──────── TXD   (divider: TXD-10k-RX, RX-20k-GND)
+                        [ 20k ]
+  GND ───────────────────┴────────► GND
 ```
 
-Avoid GPIO12/13 (USB-Serial-JTAG) and strapping pins GPIO8/9/15.
+The C6 is **not 5 V tolerant** — YS-IRTM `TXD` (5 V) must go through the divider into
+`GPIO4`. The C6's 3.3 V `TX` into YS-IRTM `RXD` is usually accepted directly. Avoid
+GPIO12/13 (USB-Serial-JTAG) and strapping pins GPIO8/9/15.
 
 ### Slave — Seeed XIAO ESP32-C6 (LiPo powered, transmit-only)
 
@@ -135,5 +145,5 @@ Firmware and host integration are written and **both apps build clean** for esp3
 **Not yet verified on hardware** (needs the physical boards + your Z2M/HA): flashing,
 pairing, IR capture/replay, and code replication. See the verification steps in
 [`docs/specs/2026-06-23-espir-design.md`](docs/specs/2026-06-23-espir-design.md). Wire the
-master per [`hardware/wiring-master.md`](hardware/wiring-master.md) (you'll need the VS1838B
-receiver), flash, and run `idf.py monitor` to watch it learn.
+master per [`hardware/wiring-master.md`](hardware/wiring-master.md) (YS-IRTM over UART, with
+the TXD divider), flash, and run `idf.py monitor` to watch it learn.

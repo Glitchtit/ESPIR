@@ -5,13 +5,21 @@ config ESPIR_SLOT_COUNT
     default 32
     range 1 64
 
-config ESPIR_IR_TX_GPIO
-    int "IR transmitter DAT GPIO"
+config ESPIR_IRTM_UART_NUM
+    int "YS-IRTM UART port number"
+    default 1
+
+config ESPIR_IRTM_TX_GPIO
+    int "UART TX GPIO (C6 TX -> YS-IRTM RXD)"
     default 5
 
-config ESPIR_IR_RX_GPIO
-    int "IR receiver OUT GPIO"
+config ESPIR_IRTM_RX_GPIO
+    int "UART RX GPIO (C6 RX <- YS-IRTM TXD, via level divider)"
     default 4
+
+config ESPIR_IRTM_BAUD
+    int "YS-IRTM UART baud rate"
+    default 9600
 
 config ESPIR_LEARN_TIMEOUT_MS
     int "Learn-mode timeout (ms)"

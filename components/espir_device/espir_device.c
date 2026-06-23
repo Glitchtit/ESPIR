@@ -9,6 +9,7 @@
 
 #include "espir_code.h"
 #include "espir_ir.h"
+#include "espir_irtm.h"
 #include "espir_store.h"
 
 static const char *TAG = "espir_dev";
@@ -66,13 +67,24 @@ static void report_attr(uint16_t attr_id)
 static void do_send(uint8_t slot)
 {
     espir_code_t code;
-    if (espir_store_load(slot, &code) == ESP_OK) {
-        esp_err_t err = espir_ir_send(&code);
-        if (err != ESP_OK) ESP_LOGW(TAG, "send slot %u failed: %s", slot, esp_err_to_name(err));
-        else ESP_LOGI(TAG, "sent slot %u", slot);
-    } else {
+    if (espir_store_load(slot, &code) != ESP_OK) {
         ESP_LOGW(TAG, "send: slot %u empty", slot);
+        return;
     }
+    esp_err_t err;
+    if (s_cfg.role == ESPIR_ROLE_MASTER) {
+        /* Master IR backend = YS-IRTM (NEC-only over UART). */
+        if (code.kind != ESPIR_KIND_NEC) {
+            ESP_LOGW(TAG, "send: slot %u is RAW, YS-IRTM master can only send NEC", slot);
+            return;
+        }
+        err = espir_irtm_send(code.nec[0], code.nec[1], code.nec[2]);
+    } else {
+        /* Slave IR backend = SZHJW + RMT (NEC re-encode or raw replay). */
+        err = espir_ir_send(&code);
+    }
+    if (err != ESP_OK) ESP_LOGW(TAG, "send slot %u failed: %s", slot, esp_err_to_name(err));
+    else ESP_LOGI(TAG, "sent slot %u", slot);
 }
 
 static void start_learn(uint8_t slot)
@@ -150,11 +162,20 @@ static void learn_task(void *arg)
     while (1) {
         xSemaphoreTake(s_learn_sem, portMAX_DELAY);
         uint8_t slot = s_active_learn;
-        espir_code_t code;
-        esp_err_t err = espir_ir_receive(&code, s_cfg.learn_timeout_ms);
 
+        /* Master learns through the YS-IRTM, which decodes NEC for us. */
+        uint8_t b0, b1, kc;
+        esp_err_t err = espir_irtm_receive(&b0, &b1, &kc, s_cfg.learn_timeout_ms);
+
+        espir_code_t code;
         if (err == ESP_OK) {
-            espir_code_try_compact(&code);
+            memset(&code, 0, sizeof(code));
+            code.kind = ESPIR_KIND_NEC;
+            code.carrier_khz = ESPIR_CARRIER_DEFAULT_KHZ;
+            code.nec[0] = b0;
+            code.nec[1] = b1;
+            code.nec[2] = kc;
+            code.nec[3] = (uint8_t)~kc;     /* NEC inverse, for the RMT slaves to replay */
             espir_store_save(slot, &code);
 
             uint8_t blob[ESPIR_RAW_MAX_BYTES];
