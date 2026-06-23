@@ -1,5 +1,6 @@
 #include "espir_device.h"
 #include <string.h>
+#include <stdbool.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
@@ -20,6 +21,7 @@ static const char *TAG = "espir_dev";
 
 static espir_device_cfg_t s_cfg;
 static SemaphoreHandle_t  s_learn_sem;
+static volatile bool s_joined;   /* sleepy ED: only sleep once joined (commissioning must stay awake) */
 
 /* Custom-cluster attribute backing storage. */
 static uint8_t  s_slot_count;
@@ -292,7 +294,7 @@ void esp_zb_app_signal_handler(esp_zb_app_signal_t *signal_struct)
     switch (sig) {
     case ESP_ZB_COMMON_SIGNAL_CAN_SLEEP:
 #if CONFIG_PM_ENABLE
-        esp_zb_sleep_now();   /* sleepy end device: enter light sleep until next activity */
+        if (s_joined) esp_zb_sleep_now();   /* only sleep after joining; stay awake to commission */
 #endif
         break;
     case ESP_ZB_ZDO_SIGNAL_SKIP_STARTUP:
@@ -306,6 +308,7 @@ void esp_zb_app_signal_handler(esp_zb_app_signal_t *signal_struct)
                 esp_zb_bdb_start_top_level_commissioning(ESP_ZB_BDB_MODE_NETWORK_STEERING);
             } else {
                 ESP_LOGI(TAG, "rejoined existing network");
+                s_joined = true;
                 esp_zb_scheduler_alarm(report_all_cb, 0, 2000);
             }
         } else {
@@ -316,6 +319,7 @@ void esp_zb_app_signal_handler(esp_zb_app_signal_t *signal_struct)
         if (st == ESP_OK) {
             ESP_LOGI(TAG, "joined network (PAN 0x%04hx, ch %d)",
                      esp_zb_get_pan_id(), esp_zb_get_current_channel());
+            s_joined = true;
             esp_zb_scheduler_alarm(report_all_cb, 0, 2000);
         } else {
             ESP_LOGW(TAG, "steering failed (%s), retrying", esp_err_to_name(st));
