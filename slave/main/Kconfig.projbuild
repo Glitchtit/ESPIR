@@ -9,4 +9,12 @@ config ESPIR_IR_TX_GPIO
     int "IR transmitter DAT GPIO"
     default 18
 
+config ESPIR_XIAO_EXT_ANTENNA
+    bool "XIAO ESP32-C6: use external U.FL antenna (else onboard ceramic)"
+    default n
+    help
+        The XIAO ESP32-C6 has an RF switch: GPIO3 must be LOW to enable it, and GPIO14
+        selects the antenna (LOW = onboard ceramic, HIGH = external U.FL). Without this the
+        radio can't reach the network. Enable this only if you've attached the U.FL antenna.
+
 endmenu

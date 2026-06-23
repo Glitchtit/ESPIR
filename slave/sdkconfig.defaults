@@ -1,4 +1,4 @@
-# --- Zigbee: Sleepy End Device ---
+# --- Zigbee: End Device ---
 CONFIG_ZB_ENABLED=y
 CONFIG_ZB_ZED=y
 CONFIG_ZB_RADIO_NATIVE=y
@@ -18,10 +18,10 @@ CONFIG_FREERTOS_HZ=1000
 # --- Console on the native USB-Serial-JTAG (so logs appear on /dev/ttyACM0) ---
 CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
 
-# --- Power management for battery sleepy end device ---
-# Enables the esp_zb_sleep_enable() path and tickless idle light sleep.
-# NOTE: measure real current — the esp-zigbee-sdk on C6 has a known light-sleep
-# current-draw issue; tune or pin SDK version if battery life disappoints.
-CONFIG_PM_ENABLE=y
-CONFIG_FREERTOS_USE_TICKLESS_IDLE=y
-CONFIG_PM_SLP_IRAM_OPT=y
+# --- Power management (battery sleepy end device) — DISABLED for now ---
+# Sleeping during commissioning was preventing the ED from joining, so the slave runs as a
+# non-sleepy end device (radio on) until join + transmit are verified. Re-enable these to
+# make it sleepy for battery use (gated by CONFIG_PM_ENABLE in firmware), then re-test join.
+# CONFIG_PM_ENABLE=y
+# CONFIG_FREERTOS_USE_TICKLESS_IDLE=y
+# CONFIG_PM_SLP_IRAM_OPT=y

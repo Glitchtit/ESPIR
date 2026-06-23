@@ -291,7 +291,7 @@ void esp_zb_app_signal_handler(esp_zb_app_signal_t *signal_struct)
 
     switch (sig) {
     case ESP_ZB_COMMON_SIGNAL_CAN_SLEEP:
-#if CONFIG_ZB_ZED
+#if CONFIG_PM_ENABLE
         esp_zb_sleep_now();   /* sleepy end device: enter light sleep until next activity */
 #endif
         break;
@@ -338,8 +338,8 @@ static void esp_zb_task(void *arg)
             .nwk_cfg.zczr_cfg = {.max_children = 10},
         };
     } else {
-#if CONFIG_ZB_ZED
-        esp_zb_sleep_enable(true);  /* sleep API only exists in the end-device lib variant */
+#if CONFIG_PM_ENABLE
+        esp_zb_sleep_enable(true);  /* sleepy end device (battery). Sleep API is ED-lib only. */
 #endif
         zb_cfg = (esp_zb_cfg_t){
             .esp_zb_role = ESP_ZB_DEVICE_TYPE_ED,
