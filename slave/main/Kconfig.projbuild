@@ -24,6 +24,14 @@ config ESPIR_BATTERY_ADC_GPIO
         ADC1 GPIO that reads the LiPo through a 200k:200k (1:2) divider from BAT+ to GND.
         On the XIAO ESP32-C6 use A0 (GPIO0). Must be an ADC1 pin (GPIO0–6).
 
+config ESPIR_BATTERY_DIV_X100
+    int "Battery divider ratio ×100 = (R_top + R_bottom) * 100 / R_bottom"
+    default 200
+    help
+        200 = a 1:2 divider (two equal resistors, e.g. 1M:1M or 200k:200k). For unequal
+        resistors compute (R_top + R_bottom) * 100 / R_bottom, e.g. 1M(top):55k(bottom) = 1918.
+        R_top goes from BAT+ to the ADC pin; R_bottom from the ADC pin to GND.
+
 config ESPIR_XIAO_EXT_ANTENNA
     bool "XIAO ESP32-C6: use external U.FL antenna (else onboard ceramic)"
     default n

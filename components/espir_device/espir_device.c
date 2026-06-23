@@ -153,7 +153,8 @@ static void battery_sample(void)
         acc += mv; n++;
     }
     if (!n) return;
-    int vbat_mv = (acc / n) * 2;   /* undo the 1:2 divider */
+    int div = s_cfg.battery_div_x100 ? s_cfg.battery_div_x100 : 200;   /* default ÷2 */
+    int vbat_mv = (acc / n) * div / 100;   /* undo the resistor divider */
     int pct = (vbat_mv - ESPIR_BATT_MV_EMPTY) * 100 / (ESPIR_BATT_MV_FULL - ESPIR_BATT_MV_EMPTY);
     if (pct < 0) pct = 0; else if (pct > 100) pct = 100;
     s_batt_voltage = (uint8_t)((vbat_mv + 50) / 100);   /* 100mV units */

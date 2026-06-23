@@ -26,27 +26,30 @@ XIAO ESP32-C6                     SZHJW IR TX (2× 940nm)
 
 Battery sense (1:2 divider — required for the battery indicator):
 
-  BAT+ ──[ R1 200kΩ ]──┬──► A0 (GPIO0)
-                       │
-                     [ R2 200kΩ ]
-                       │
-                      GND
+  BAT+ ──[ R_top 1MΩ ]──┬──► A0 (GPIO0)
+                        │
+                     [ R_bottom 1MΩ ]   ║ 100nF (A0→GND, for ADC accuracy)
+                        │                ║
+                       GND ──────────────╨
 ```
 
 ## Battery indicator
 
-The firmware reads `A0`/GPIO0, multiplies by 2 (the 1:2 divider), maps 3.30 V→0 % …
-4.20 V→100 %, and reports **battery %** and **voltage** over the standard Zigbee Power
-Configuration cluster (0x0001) every ~10 minutes. Z2M then shows a battery entity (the
-`ESPIR-SLAVE` converter exposes `battery` + `battery_voltage`).
+The firmware reads `A0`/GPIO0, undoes the divider, maps 3.30 V→0 % … 4.20 V→100 %, and reports
+**battery %** and **voltage** over the standard Zigbee Power Configuration cluster (0x0001)
+every ~10 minutes. Z2M then shows a battery entity (the `ESPIR-SLAVE` converter exposes
+`battery` + `battery_voltage`).
 
-- Use **two equal resistors** (200 kΩ each shown; 100 kΩ–1 MΩ all work — higher = less drain
-  but noisier). Equal values give the ÷2 the firmware assumes; change `ESPIR_BATT_MV_*` or the
-  ratio in `espir_device.c` if you use a different ratio.
-- The ADC pin is set by `menuconfig` → ESPIR Configuration → *Battery sense ADC GPIO*
-  (`CONFIG_ESPIR_BATTERY_ADC_GPIO`, default 0 = A0). Must be an ADC1 pin (GPIO0–6).
-- Tip: a high-value divider leaks a little current continuously; 200 kΩ–1 MΩ keeps it small.
-  If you want zero idle drain, gate the divider with a MOSFET — not done here for simplicity.
+- **Recommended: two 1 MΩ** (a 1:2 divider → the default ÷2). At 1 MΩ the divider only leaks
+  ~2 µA, which is ideal for battery life. Because 1 MΩ is high impedance for the ADC, add a
+  **100 nF cap from A0 to GND** so the sample settles — without it the reading reads low/noisy.
+  (200 kΩ:200 kΩ also works and needs no cap, but leaks ~38 µA.)
+- **Different/unequal resistors?** Set the ratio in `menuconfig` → ESPIR Configuration →
+  *Battery divider ratio ×100* (`CONFIG_ESPIR_BATTERY_DIV_X100`):
+  `(R_top + R_bottom) * 100 / R_bottom`. Examples: 1 MΩ:1 MΩ → **200**; 1 MΩ(top):55 kΩ(bottom)
+  → **1918**. Keep the divided voltage under ~3.0 V at 4.2 V full (so put the *larger* resistor
+  on top — never the small one, or the ADC will clip).
+- The ADC pin is `CONFIG_ESPIR_BATTERY_ADC_GPIO` (default 0 = A0); must be an ADC1 pin (GPIO0–6).
 
 ## Notes
 

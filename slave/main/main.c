@@ -48,6 +48,7 @@ void app_main(void)
         .send_hold_ms = CONFIG_ESPIR_SEND_HOLD_MS,
         .battery = true,
         .battery_adc_gpio = CONFIG_ESPIR_BATTERY_ADC_GPIO,
+        .battery_div_x100 = CONFIG_ESPIR_BATTERY_DIV_X100,
     };
     espir_device_start(&cfg);
 }
