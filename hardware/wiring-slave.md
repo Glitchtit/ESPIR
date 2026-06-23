@@ -26,12 +26,15 @@ XIAO ESP32-C6                     SZHJW IR TX (2× 940nm)
 
 Battery sense (1:2 divider — required for the battery indicator):
 
-  BAT+ ──[ R_top 1MΩ ]──┬──► A0 (GPIO0)
+  BAT+ ──[ R_top 1MΩ ]──┬──► D0 (= A0 = GPIO0)
                         │
-                     [ R_bottom 1MΩ ]   ║ 100nF (A0→GND, for ADC accuracy)
+                     [ R_bottom 1MΩ ]   ║ 100nF (D0→GND, for ADC accuracy)
                         │                ║
                        GND ──────────────╨
 ```
+
+> On the XIAO ESP32-C6 the pin is silkscreened **D0** — it is the same pin as **A0 / GPIO0**.
+
 
 ## Battery indicator
 
