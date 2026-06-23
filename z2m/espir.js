@@ -87,20 +87,40 @@ const fzEspir = {
     },
 };
 
-// ---- toZigbee: writing an expose issues the matching cluster command --------
+// ---- toZigbee --------------------------------------------------------------
 // The custom cluster lives on endpoint 10, so always target that endpoint explicitly
 // (Z2M would otherwise default to endpoint 1, which doesn't have cluster 0xFC00).
 const ESPIR_EP = 10;
 const espirEndpoint = (meta) => meta.device.getEndpoint(ESPIR_EP);
+const ATTRS = ['slotCount', 'fwRole', 'learnStatus', 'lastSlot', 'lastKind', 'lastCarrier', 'lastCode'];
 
+// `slot` — the selector the action buttons act on. Stored in state, no device traffic.
+const tzSlot = {
+    key: ['slot'],
+    convertSet: async (entity, key, value, meta) => ({state: {slot: Number(value)}}),
+};
+
+// `action` — the Learn / Send / Clear buttons. Operates on the currently selected `slot`.
+const tzAction = {
+    key: ['action'],
+    convertSet: async (entity, key, value, meta) => {
+        const command = {learn: 'learn', send: 'send', clear: 'clear'}[value];
+        if (!command) return;
+        const slot = Number(meta.state?.slot ?? 0);
+        await espirEndpoint(meta).command(CLUSTER, command, {slot}, {});
+        return {state: {}};
+    },
+};
+
+// Direct numeric commands for automations: publish e.g. {"send_slot": 5}. Not shown in the
+// UI (the slot+action controls cover manual use), but handled here for scripts/dashboards.
 const cmd = (key, command) => ({
     key: [key],
     convertSet: async (entity, k, value, meta) => {
         await espirEndpoint(meta).command(CLUSTER, command, {slot: Number(value)}, {});
-        return {state: {[key]: value}};
+        return {state: {}};
     },
 });
-
 const tzLearn = cmd('learn_slot', 'learn');
 const tzSend = cmd('send_slot', 'send');
 const tzClear = cmd('clear_slot', 'clear');
@@ -130,12 +150,21 @@ const tzProgram = {
     },
 };
 
+// Read the custom-cluster attributes on join / reconfigure so status isn't "Null".
+const espirConfigure = async (device, coordinatorEndpoint, definition) => {
+    const ep = device.getEndpoint(ESPIR_EP);
+    if (ep) {
+        try { await ep.read(CLUSTER, ATTRS); } catch (e) { /* device asleep or busy */ }
+    }
+};
+
 // ---- Definitions -----------------------------------------------------------
-const baseExposes = (maxSlot) => [
-    e.numeric('send_slot', ea.SET).withValueMin(0).withValueMax(maxSlot)
-        .withDescription('Transmit the IR code stored in this slot'),
+const slotExpose = e.numeric('slot', ea.STATE_SET).withValueMin(0).withValueMax(31)
+    .withDescription('Slot the action buttons below operate on');
+
+const statusExposes = [
     e.enum('learn_status', ea.STATE, Object.values(LEARN_STATUS))
-        .withDescription('State of the learn operation'),
+        .withDescription('State of the last learn operation'),
     e.numeric('last_slot', ea.STATE).withDescription('Slot most recently learned'),
     e.enum('last_kind', ea.STATE, Object.values(KIND)).withDescription('Encoding of the last learned code'),
     e.text('last_code', ea.STATE).withDescription('Last learned code as hex (used for slave replication)'),
@@ -150,13 +179,14 @@ const masterDefinition = {
     description: 'ESP32-C6 Zigbee IR blaster — master (learn + store + transmit)',
     extend: [espirCluster],
     fromZigbee: [fzEspir],
-    toZigbee: [tzLearn, tzSend, tzClear, tzProgram],
+    toZigbee: [tzSlot, tzAction, tzLearn, tzSend, tzClear, tzProgram],
+    configure: espirConfigure,
     exposes: [
-        e.numeric('learn_slot', ea.SET).withValueMin(0).withValueMax(31)
-            .withDescription('Enter learn mode for this slot, then press the remote key'),
-        e.numeric('clear_slot', ea.SET).withValueMin(0).withValueMax(31)
-            .withDescription('Erase the IR code in this slot'),
-        ...baseExposes(31),
+        slotExpose,
+        e.enum('action', ea.SET, ['learn', 'send', 'clear'])
+            .withDescription('Learn into / transmit / clear the selected slot. ' +
+                             'Set "slot" first, then pick an action.'),
+        ...statusExposes,
     ],
 };
 
@@ -165,13 +195,16 @@ const slaveDefinition = {
     model: 'ESPIR-SLAVE',
     vendor: 'ESPIR',
     description: 'ESP32-C6 Zigbee IR blaster — slave (transmit-only repeater)',
-    extend: [espirCluster, m.battery()],
+    extend: [espirCluster],
     fromZigbee: [fzEspir],
-    toZigbee: [tzSend, tzClear, tzProgram],
+    toZigbee: [tzSlot, tzAction, tzSend, tzClear, tzProgram],
+    configure: espirConfigure,
     exposes: [
-        e.numeric('clear_slot', ea.SET).withValueMin(0).withValueMax(31)
-            .withDescription('Erase the IR code in this slot'),
-        ...baseExposes(31),
+        slotExpose,
+        e.enum('action', ea.SET, ['send', 'clear'])
+            .withDescription('Transmit / clear the selected slot. Set "slot" first.'),
+        e.text('last_code', ea.STATE).withDescription('Last code programmed (hex)'),
+        e.numeric('slot_count', ea.STATE).withDescription('Number of storage slots'),
     ],
 };
 
