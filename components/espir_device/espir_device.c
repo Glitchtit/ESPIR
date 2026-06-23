@@ -14,6 +14,7 @@
 static const char *TAG = "espir_dev";
 
 #define ESPIR_ENDPOINT       10
+#define ESPIR_LAST_CODE_MAX  48   /* max last_code bytes that fit one ZCL report frame */
 #define COORDINATOR_SHORT    0x0000
 #define COORDINATOR_ENDPOINT 1
 
@@ -177,6 +178,7 @@ static void learn_task(void *arg)
     while (1) {
         xSemaphoreTake(s_learn_sem, portMAX_DELAY);
         uint8_t slot = s_active_learn;
+        if (slot >= (uint8_t)espir_store_count()) continue;  /* ignore spurious/duplicate triggers */
 
         /* Master learns by raw-capturing the envelope from the VS1838B receiver (RMT RX),
          * then compacting to NEC when the capture decodes. Learns any protocol. */
@@ -186,11 +188,15 @@ static void learn_task(void *arg)
             espir_code_try_compact(&code);
             espir_store_save(slot, &code);
 
+            /* last_code is a reportable attribute, so it must fit one ZCL frame. NEC (4 B) and
+             * short raw codes are exposed for slave replication; longer raw codes (e.g. a
+             * Samsung TV frame, ~134 B) would overflow the frame and crash the stack, so we
+             * leave last_code empty for those — the code is still stored and sendable. */
             static uint8_t blob[ESPIR_RAW_MAX_BYTES];
             int blen = espir_code_to_blob(&code, blob, sizeof(blob));
-            int clip = (blen > 254) ? 254 : blen;        /* octet string max */
+            int clip = (blen <= ESPIR_LAST_CODE_MAX) ? blen : 0;
             s_last_code[0] = (uint8_t)clip;
-            memcpy(&s_last_code[1], blob, clip);
+            if (clip) memcpy(&s_last_code[1], blob, clip);
 
             s_last_slot = slot;
             s_last_kind = code.kind;
@@ -198,7 +204,7 @@ static void learn_task(void *arg)
             s_learn_status = ESPIR_LEARN_CAPTURED;
             ESP_LOGI(TAG, "learned slot %u kind=%s carrier=%u (blob %d B%s)",
                      slot, code.kind == ESPIR_KIND_NEC ? "NEC" : "RAW",
-                     code.carrier_khz, blen, blen > 254 ? ", clipped for report" : "");
+                     code.carrier_khz, blen, clip ? "" : ", too long to expose in last_code");
         } else {
             s_learn_status = ESPIR_LEARN_FAILED;
             ESP_LOGW(TAG, "learn slot %u failed: %s", slot, esp_err_to_name(err));
