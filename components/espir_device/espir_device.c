@@ -290,6 +290,11 @@ void esp_zb_app_signal_handler(esp_zb_app_signal_t *signal_struct)
     esp_zb_app_signal_type_t sig = *p;
 
     switch (sig) {
+    case ESP_ZB_COMMON_SIGNAL_CAN_SLEEP:
+#if CONFIG_ZB_ZED
+        esp_zb_sleep_now();   /* sleepy end device: enter light sleep until next activity */
+#endif
+        break;
     case ESP_ZB_ZDO_SIGNAL_SKIP_STARTUP:
         esp_zb_bdb_start_top_level_commissioning(ESP_ZB_BDB_MODE_INITIALIZATION);
         break;
