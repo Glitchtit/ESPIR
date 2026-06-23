@@ -88,10 +88,15 @@ const fzEspir = {
 };
 
 // ---- toZigbee: writing an expose issues the matching cluster command --------
+// The custom cluster lives on endpoint 10, so always target that endpoint explicitly
+// (Z2M would otherwise default to endpoint 1, which doesn't have cluster 0xFC00).
+const ESPIR_EP = 10;
+const espirEndpoint = (meta) => meta.device.getEndpoint(ESPIR_EP);
+
 const cmd = (key, command) => ({
     key: [key],
     convertSet: async (entity, k, value, meta) => {
-        await entity.command(CLUSTER, command, {slot: Number(value)}, {});
+        await espirEndpoint(meta).command(CLUSTER, command, {slot: Number(value)}, {});
         return {state: {[key]: value}};
     },
 });
@@ -110,15 +115,16 @@ const tzProgram = {
         const kind = value.kind === 'nec' ? 1 : 0;
         const carrier = Number(value.carrier_khz ?? 38);
         const code = Buffer.from(String(value.code), 'hex');
+        const ep = espirEndpoint(meta);
         const MAX = 60; // conservative single-frame payload budget (bytes)
         if (code.length <= MAX) {
-            await entity.command(CLUSTER, 'program', {slot, kind, carrierKhz: carrier, code}, {});
+            await ep.command(CLUSTER, 'program', {slot, kind, carrierKhz: carrier, code}, {});
         } else {
-            await entity.command(CLUSTER, 'programBegin', {slot, kind, carrierKhz: carrier, totalLen: code.length}, {});
+            await ep.command(CLUSTER, 'programBegin', {slot, kind, carrierKhz: carrier, totalLen: code.length}, {});
             for (let seq = 0, off = 0; off < code.length; seq++, off += MAX) {
-                await entity.command(CLUSTER, 'programChunk', {slot, seq, data: code.slice(off, off + MAX)}, {});
+                await ep.command(CLUSTER, 'programChunk', {slot, seq, data: code.slice(off, off + MAX)}, {});
             }
-            await entity.command(CLUSTER, 'programCommit', {slot}, {});
+            await ep.command(CLUSTER, 'programCommit', {slot}, {});
         }
         return {state: {}};
     },
