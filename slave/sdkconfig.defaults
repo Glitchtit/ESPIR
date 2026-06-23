@@ -15,6 +15,9 @@ CONFIG_ESPTOOLPY_FLASHSIZE="4MB"
 # --- Recommended for Zigbee timing ---
 CONFIG_FREERTOS_HZ=1000
 
+# --- Console on the native USB-Serial-JTAG (so logs appear on /dev/ttyACM0) ---
+CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
+
 # --- Power management for battery sleepy end device ---
 # Enables the esp_zb_sleep_enable() path and tickless idle light sleep.
 # NOTE: measure real current — the esp-zigbee-sdk on C6 has a known light-sleep
