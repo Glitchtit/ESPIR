@@ -17,4 +17,11 @@ config ESPIR_LEARN_TIMEOUT_MS
     int "Learn-mode timeout (ms)"
     default 15000
 
+config ESPIR_SEND_HOLD_MS
+    int "Send hold time (ms) — repeat each send this long, like holding a remote key"
+    default 300
+    help
+        On send, the frame is retransmitted until this much time has elapsed (0 = single shot).
+        Mimics holding the button so appliances that need several frames respond reliably.
+
 endmenu

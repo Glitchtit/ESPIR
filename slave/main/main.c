@@ -45,6 +45,7 @@ void app_main(void)
         .manufacturer = "ESPIR",
         .model = "ESPIR-SLAVE",
         .learn_timeout_ms = 0,
+        .send_hold_ms = CONFIG_ESPIR_SEND_HOLD_MS,
     };
     espir_device_start(&cfg);
 }

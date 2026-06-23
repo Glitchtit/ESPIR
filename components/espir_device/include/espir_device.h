@@ -17,6 +17,7 @@ typedef struct {
     const char  *manufacturer;    /* Basic-cluster manufacturer string, e.g. "ESPIR" */
     const char  *model;           /* Basic-cluster model string, e.g. "ESPIR-MASTER" */
     uint32_t     learn_timeout_ms;/* master only: how long learn mode waits for a key */
+    uint32_t     send_hold_ms;    /* repeat each send for this long (mimics holding a remote key); 0 = single shot */
 } espir_device_cfg_t;
 
 /* Starts the Zigbee stack task. Does not return control of the Zigbee stack; safe to call

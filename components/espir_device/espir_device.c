@@ -4,6 +4,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
+#include "freertos/queue.h"
 #include "esp_log.h"
 #include "esp_check.h"
 #include "esp_zigbee_core.h"
@@ -21,6 +22,7 @@ static const char *TAG = "espir_dev";
 
 static espir_device_cfg_t s_cfg;
 static SemaphoreHandle_t  s_learn_sem;
+static QueueHandle_t      s_send_q;   /* slot numbers to transmit, off the Zigbee task */
 static volatile bool s_joined;   /* sleepy ED: only sleep once joined (commissioning must stay awake) */
 
 /* Custom-cluster attribute backing storage. */
@@ -91,18 +93,46 @@ static void report_all_cb(uint8_t param)
     report_all();
 }
 
-/* ---- command actions (run in the Zigbee task via the action handler) ------- */
-static void do_send(uint8_t slot)
+/* ---- transmit (runs in its own task so a held send never blocks the Zigbee stack) ---- */
+#define ESPIR_SEND_GAP_MS 40   /* inter-frame gap; ~frame+gap ≈ a real remote's repeat period */
+
+static void send_worker(uint8_t slot)
 {
-    static espir_code_t code;   /* ~1 KB — keep off the (Zigbee task) stack */
+    static espir_code_t code;   /* ~1 KB — keep off the task stack */
     if (espir_store_load(slot, &code) != ESP_OK) {
         ESP_LOGW(TAG, "send: slot %u empty", slot);
         return;
     }
-    /* Both roles transmit via the SZHJW on the RMT peripheral (NEC re-encode or raw replay). */
-    esp_err_t err = espir_ir_send(&code);
+    /* Repeat the frame for send_hold_ms to mimic holding the remote key (many appliances need
+     * more than one frame to react). Both roles transmit via the SZHJW on the RMT peripheral. */
+    TickType_t start = xTaskGetTickCount();
+    TickType_t hold  = pdMS_TO_TICKS(s_cfg.send_hold_ms);
+    int frames = 0;
+    esp_err_t err;
+    do {
+        err = espir_ir_send(&code);
+        if (err != ESP_OK) break;
+        frames++;
+        if ((xTaskGetTickCount() - start) >= hold) break;
+        vTaskDelay(pdMS_TO_TICKS(ESPIR_SEND_GAP_MS));
+    } while ((xTaskGetTickCount() - start) < hold);
     if (err != ESP_OK) ESP_LOGW(TAG, "send slot %u failed: %s", slot, esp_err_to_name(err));
-    else ESP_LOGI(TAG, "sent slot %u", slot);
+    else ESP_LOGI(TAG, "sent slot %u (%d frames over %ums)", slot, frames, (unsigned)s_cfg.send_hold_ms);
+}
+
+static void send_task(void *arg)
+{
+    (void)arg;
+    uint8_t slot;
+    for (;;) {
+        if (xQueueReceive(s_send_q, &slot, portMAX_DELAY) == pdTRUE) send_worker(slot);
+    }
+}
+
+/* Queue a send from the Zigbee task — non-blocking, so the stack keeps running. */
+static void do_send(uint8_t slot)
+{
+    if (s_send_q) xQueueSend(s_send_q, &slot, 0);
 }
 
 static void start_learn(uint8_t slot)
@@ -434,6 +464,8 @@ void espir_device_start(const espir_device_cfg_t *cfg)
     s_last_code[0] = 0;
 
     s_learn_sem = xSemaphoreCreateBinary();
+    s_send_q = xQueueCreate(4, sizeof(uint8_t));
+    xTaskCreate(send_task, "espir_send", 4096, NULL, 5, NULL);
 
     esp_zb_platform_config_t pc = {
         .radio_config = {.radio_mode = ZB_RADIO_MODE_NATIVE},

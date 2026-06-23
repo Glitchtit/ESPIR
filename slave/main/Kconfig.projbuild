@@ -9,6 +9,13 @@ config ESPIR_IR_TX_GPIO
     int "IR transmitter DAT GPIO"
     default 18
 
+config ESPIR_SEND_HOLD_MS
+    int "Send hold time (ms) — repeat each send this long, like holding a remote key"
+    default 300
+    help
+        On send, the frame is retransmitted until this much time has elapsed (0 = single shot).
+        Mimics holding the button so appliances that need several frames respond reliably.
+
 config ESPIR_XIAO_EXT_ANTENNA
     bool "XIAO ESP32-C6: use external U.FL antenna (else onboard ceramic)"
     default n
