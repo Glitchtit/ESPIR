@@ -245,7 +245,6 @@ const slaveDefinition = {
         e.text('last_code', ea.STATE).withDescription('Last code programmed (hex)'),
         e.numeric('slot_count', ea.STATE).withDescription('Number of storage slots'),
         e.battery(),            // LiPo % from the Power Config cluster (device self-reports)
-        e.battery_voltage(),
     ],
 };
 
