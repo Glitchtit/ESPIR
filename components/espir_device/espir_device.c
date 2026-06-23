@@ -66,7 +66,7 @@ static void report_attr(uint16_t attr_id)
 /* ---- command actions (run in the Zigbee task via the action handler) ------- */
 static void do_send(uint8_t slot)
 {
-    espir_code_t code;
+    static espir_code_t code;   /* ~1 KB — keep off the (Zigbee task) stack */
     if (espir_store_load(slot, &code) != ESP_OK) {
         ESP_LOGW(TAG, "send: slot %u empty", slot);
         return;
@@ -167,7 +167,7 @@ static void learn_task(void *arg)
         uint8_t b0, b1, kc;
         esp_err_t err = espir_irtm_receive(&b0, &b1, &kc, s_cfg.learn_timeout_ms);
 
-        espir_code_t code;
+        static espir_code_t code;   /* ~1 KB — keep off the learn-task stack */
         if (err == ESP_OK) {
             memset(&code, 0, sizeof(code));
             code.kind = ESPIR_KIND_NEC;
@@ -178,7 +178,7 @@ static void learn_task(void *arg)
             code.nec[3] = (uint8_t)~kc;     /* NEC inverse, for the RMT slaves to replay */
             espir_store_save(slot, &code);
 
-            uint8_t blob[ESPIR_RAW_MAX_BYTES];
+            static uint8_t blob[ESPIR_RAW_MAX_BYTES];
             int blen = espir_code_to_blob(&code, blob, sizeof(blob));
             int clip = (blen > 254) ? 254 : blen;        /* octet string max */
             s_last_code[0] = (uint8_t)clip;
@@ -348,7 +348,7 @@ void espir_device_start(const espir_device_cfg_t *cfg)
     ESP_ERROR_CHECK(esp_zb_platform_config(&pc));
 
     if (cfg->role == ESPIR_ROLE_MASTER) {
-        xTaskCreate(learn_task, "espir_learn", 4096, NULL, 5, NULL);
+        xTaskCreate(learn_task, "espir_learn", 6144, NULL, 5, NULL);
     }
     xTaskCreate(esp_zb_task, "esp_zb", 8192, NULL, 5, NULL);
 }

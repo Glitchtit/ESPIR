@@ -75,7 +75,10 @@ esp_err_t espir_store_load(uint8_t slot, espir_code_t *c)
 {
     if (slot >= CONFIG_ESPIR_SLOT_COUNT) return ESP_ERR_INVALID_ARG;
     nvs_handle_t h;
-    ESP_RETURN_ON_ERROR(nvs_open(NVS_NS, NVS_READONLY, &h), TAG, "open");
+    /* On a fresh device the namespace doesn't exist yet — that's "empty slot", not an
+     * error worth logging, so don't use ESP_RETURN_ON_ERROR here. */
+    esp_err_t oerr = nvs_open(NVS_NS, NVS_READONLY, &h);
+    if (oerr != ESP_OK) return oerr;
     char key[16];
     slot_key(slot, key);
     uint8_t rec[REC_MAX];
