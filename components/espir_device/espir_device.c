@@ -117,6 +117,59 @@ static void start_learn(uint8_t slot)
     ESP_LOGI(TAG, "learn mode for slot %u", slot);
 }
 
+/* ---- master -> peer replication: push a stored slot to a slave over Zigbee ----------
+ * Reuses the slave's program_begin/chunk/commit handler. Chunked, so it carries codes of
+ * any length (long raw included) without the single-frame limit that blocks last_code. */
+#define ESPIR_TX_CHUNK 56
+
+static void send_custom_to(esp_zb_ieee_addr_t dst, uint8_t cmd_id, uint8_t *payload, uint16_t len)
+{
+    esp_zb_zcl_custom_cluster_cmd_t req = {0};
+    memcpy(req.zcl_basic_cmd.dst_addr_u.addr_long, dst, sizeof(esp_zb_ieee_addr_t));
+    req.zcl_basic_cmd.dst_endpoint = ESPIR_ENDPOINT;
+    req.zcl_basic_cmd.src_endpoint = ESPIR_ENDPOINT;
+    req.address_mode = ESP_ZB_APS_ADDR_MODE_64_ENDP_PRESENT;
+    req.profile_id = ESP_ZB_AF_HA_PROFILE_ID;
+    req.cluster_id = ESPIR_CLUSTER_ID;
+    req.custom_cmd_id = cmd_id;
+    req.direction = ESP_ZB_ZCL_CMD_DIRECTION_TO_SRV;
+    req.manuf_specific = 1;
+    req.manuf_code = ESPIR_MANUF_CODE;
+    req.data.type = ESP_ZB_ZCL_ATTR_TYPE_SET;   /* raw bytes, verbatim */
+    req.data.size = len;
+    req.data.value = payload;
+    esp_zb_zcl_custom_cluster_cmd_req(&req);
+}
+
+static void replicate_slot_to(esp_zb_ieee_addr_t dst, uint8_t slot)
+{
+    static espir_code_t code;
+    if (espir_store_load(slot, &code) != ESP_OK) return;   /* empty slot — skip */
+    static uint8_t blob[ESPIR_RAW_MAX_BYTES];
+    int blen = espir_code_to_blob(&code, blob, sizeof(blob));
+    if (blen < 0) return;
+    uint8_t buf[8 + ESPIR_TX_CHUNK];
+    uint16_t carrier = code.carrier_khz;
+    if (blen <= ESPIR_TX_CHUNK) {
+        buf[0] = slot; buf[1] = code.kind; buf[2] = carrier & 0xff; buf[3] = carrier >> 8;
+        buf[4] = (uint8_t)blen; memcpy(buf + 5, blob, blen);
+        send_custom_to(dst, ESPIR_CMD_PROGRAM, buf, 5 + blen);
+    } else {
+        buf[0] = slot; buf[1] = code.kind; buf[2] = carrier & 0xff; buf[3] = carrier >> 8;
+        buf[4] = blen & 0xff; buf[5] = (blen >> 8) & 0xff;
+        send_custom_to(dst, ESPIR_CMD_PROGRAM_BEGIN, buf, 6);
+        for (int off = 0, seq = 0; off < blen; off += ESPIR_TX_CHUNK, seq++) {
+            int n = blen - off; if (n > ESPIR_TX_CHUNK) n = ESPIR_TX_CHUNK;
+            buf[0] = slot; buf[1] = (uint8_t)seq; buf[2] = (uint8_t)n; memcpy(buf + 3, blob + off, n);
+            send_custom_to(dst, ESPIR_CMD_PROGRAM_CHUNK, buf, 3 + n);
+        }
+        buf[0] = slot;
+        send_custom_to(dst, ESPIR_CMD_PROGRAM_COMMIT, buf, 1);
+    }
+    ESP_LOGI(TAG, "replicated slot %u (%d B, %s) to peer", slot, blen,
+             code.kind == ESPIR_KIND_NEC ? "NEC" : "RAW");
+}
+
 static void handle_custom_cmd(const esp_zb_zcl_custom_cluster_command_message_t *msg)
 {
     const uint8_t *p = (const uint8_t *)msg->data.value;
@@ -159,6 +212,20 @@ static void handle_custom_cmd(const esp_zb_zcl_custom_cluster_command_message_t 
         break;
     case ESPIR_CMD_PROGRAM_COMMIT:
         if (n >= 1) espir_store_program_commit(p[0]);
+        break;
+    case ESPIR_CMD_COPY_TO:                        /* slot, ieee(8 LE) */
+        if (n >= 9) {
+            esp_zb_ieee_addr_t dst;
+            memcpy(dst, &p[1], sizeof(esp_zb_ieee_addr_t));
+            replicate_slot_to(dst, p[0]);
+        }
+        break;
+    case ESPIR_CMD_COPY_ALL:                       /* ieee(8 LE) */
+        if (n >= 8) {
+            esp_zb_ieee_addr_t dst;
+            memcpy(dst, &p[0], sizeof(esp_zb_ieee_addr_t));
+            for (uint8_t s = 0; s < (uint8_t)espir_store_count(); s++) replicate_slot_to(dst, s);
+        }
         break;
     default:
         ESP_LOGW(TAG, "unknown custom cmd 0x%02x", cmd);

@@ -43,6 +43,8 @@
 #define ESPIR_CMD_PROGRAM_BEGIN     0x04    /* {slot:u8, kind:u8, carrier_khz:u16, total_len:u16} */
 #define ESPIR_CMD_PROGRAM_CHUNK     0x05    /* {slot:u8, seq:u8, data:octstr}              */
 #define ESPIR_CMD_PROGRAM_COMMIT    0x06    /* {slot:u8}                                   */
+#define ESPIR_CMD_COPY_TO           0x07    /* {slot:u8, ieee:u64} master->slave copy one slot   */
+#define ESPIR_CMD_COPY_ALL          0x08    /* {ieee:u64} master->slave copy every non-empty slot */
 
 /* ---- Enums --------------------------------------------------------------- */
 typedef enum {

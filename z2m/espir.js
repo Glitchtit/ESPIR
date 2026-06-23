@@ -61,6 +61,11 @@ const ESPIR_CLUSTER_DEF = {
             {name: 'data', type: Zcl.DataType.OCTET_STR},
         ]},
         programCommit: {ID: 0x06, parameters: [{name: 'slot', type: Zcl.DataType.UINT8}]},
+        copyTo: {ID: 0x07, parameters: [
+            {name: 'slot', type: Zcl.DataType.UINT8},
+            {name: 'ieee', type: Zcl.DataType.IEEE_ADDR},
+        ]},
+        copyAll: {ID: 0x08, parameters: [{name: 'ieee', type: Zcl.DataType.IEEE_ADDR}]},
     },
     commandsResponse: {},
 };
@@ -140,6 +145,23 @@ const tzLearn = cmd('learn_slot', 'learn');
 const tzSend = cmd('send_slot', 'send');
 const tzClear = cmd('clear_slot', 'clear');
 
+// Device-to-device replication: tell the MASTER to push a stored code straight to a slave
+// (by IEEE) over Zigbee — handles long raw codes that don't fit the last_code attribute.
+//   {"replicate_slot": {"slot": N, "target": "0x<slave-ieee>"}}
+//   {"replicate_all": "0x<slave-ieee>"}   (push every non-empty slot)
+const tzReplicate = {
+    key: ['replicate_slot', 'replicate_all'],
+    convertSet: async (entity, key, value, meta) => {
+        const ep = espirEndpoint(meta);
+        if (key === 'replicate_all') {
+            await ep.command(CLUSTER, 'copyAll', {ieee: value}, {});
+        } else {
+            await ep.command(CLUSTER, 'copyTo', {slot: Number(value.slot), ieee: value.target}, {});
+        }
+        return {state: {}};
+    },
+};
+
 // program_slot: {slot, kind: 'raw'|'nec', carrier_khz, code: '<hex>'} — used by HA
 // replication to copy a learned code into a slave. Small codes go in one `program` frame;
 // large raw codes are split into program_begin/chunk/commit (APS-fragmentable).
@@ -196,7 +218,7 @@ const masterDefinition = {
     description: 'ESP32-C6 Zigbee IR blaster — master (learn + store + transmit)',
     extend: [espirCluster],
     fromZigbee: [fzEspir, fzEspirRaw],
-    toZigbee: [tzSlot, tzAction, tzLearn, tzSend, tzClear, tzProgram],
+    toZigbee: [tzSlot, tzAction, tzLearn, tzSend, tzClear, tzProgram, tzReplicate],
     configure: espirConfigure,
     exposes: [
         slotExpose,
