@@ -7,6 +7,7 @@
 #include "freertos/queue.h"
 #include "esp_log.h"
 #include "esp_check.h"
+#include "esp_timer.h"
 
 static const char *TAG = "espir_ir";
 
@@ -137,6 +138,11 @@ esp_err_t espir_ir_send(const espir_code_t *code)
     return rmt_tx_wait_all_done(s_tx, 1000);
 }
 
+#define IR_HEADER_MIN_US 2000   /* NEC ~9000, Samsung ~4500, most ACs have a long leading mark */
+#define IR_GOOD_SYMBOLS  20     /* a real frame has many edges; fragments are short */
+
+static uint16_t s_rx_tmp[ESPIR_RAW_MAX_SYMBOLS];
+
 esp_err_t espir_ir_receive(espir_code_t *out, uint32_t timeout_ms)
 {
     if (!s_rx) return ESP_ERR_INVALID_STATE;
@@ -146,24 +152,39 @@ esp_err_t espir_ir_receive(espir_code_t *out, uint32_t timeout_ms)
         .signal_range_min_ns = RX_MIN_NS,
         .signal_range_max_ns = RX_IDLE_NS,
     };
-    ESP_RETURN_ON_ERROR(rmt_receive(s_rx, s_rx_syms, sizeof(s_rx_syms), &rcfg), TAG, "receive");
-
-    rmt_rx_done_event_data_t ev;
-    if (xQueueReceive(s_rx_queue, &ev, pdMS_TO_TICKS(timeout_ms)) != pdTRUE) {
-        return ESP_ERR_TIMEOUT;
-    }
-
     memset(out, 0, sizeof(*out));
     out->kind = ESPIR_KIND_RAW;
     out->carrier_khz = ESPIR_CARRIER_DEFAULT_KHZ;  /* demodulated RX can't tell carrier */
 
-    int k = 0;
-    for (size_t i = 0; i < ev.num_symbols && k < ESPIR_RAW_MAX_SYMBOLS; i++) {
-        if (ev.received_symbols[i].duration0) out->symbols[k++] = ev.received_symbols[i].duration0;
-        if (k < ESPIR_RAW_MAX_SYMBOLS && ev.received_symbols[i].duration1)
-            out->symbols[k++] = ev.received_symbols[i].duration1;
+    int64_t deadline = esp_timer_get_time() + (int64_t)timeout_ms * 1000;
+    int best = 0;
+
+    /* Capture repeatedly within the window. Holding/mashing a remote makes the first arm
+     * land mid-frame (a short, header-less fragment); re-arming lands in the inter-frame gap
+     * and catches the next full frame. Keep the longest, and stop once we have a clean
+     * header-led frame. */
+    while (esp_timer_get_time() < deadline) {
+        int64_t remain_ms = (deadline - esp_timer_get_time()) / 1000;
+        if (remain_ms <= 0) break;
+        if (rmt_receive(s_rx, s_rx_syms, sizeof(s_rx_syms), &rcfg) != ESP_OK) break;
+
+        rmt_rx_done_event_data_t ev;
+        if (xQueueReceive(s_rx_queue, &ev, pdMS_TO_TICKS(remain_ms)) != pdTRUE) break;
+
+        int k = 0;
+        for (size_t i = 0; i < ev.num_symbols && k < ESPIR_RAW_MAX_SYMBOLS; i++) {
+            if (ev.received_symbols[i].duration0) s_rx_tmp[k++] = ev.received_symbols[i].duration0;
+            if (k < ESPIR_RAW_MAX_SYMBOLS && ev.received_symbols[i].duration1)
+                s_rx_tmp[k++] = ev.received_symbols[i].duration1;
+        }
+        if (k > best) {
+            memcpy(out->symbols, s_rx_tmp, k * sizeof(uint16_t));
+            out->n_symbols = k;
+            best = k;
+        }
+        if (best >= IR_GOOD_SYMBOLS && out->symbols[0] >= IR_HEADER_MIN_US) break; /* full frame */
     }
-    out->n_symbols = k;
-    if (k < 2) return ESP_ERR_INVALID_RESPONSE;
-    return ESP_OK;
+
+    ESP_LOGI(TAG, "rx captured %d durations, header=%u us", best, best ? out->symbols[0] : 0);
+    return best >= 2 ? ESP_OK : ESP_ERR_TIMEOUT;
 }
