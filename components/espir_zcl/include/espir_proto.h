@@ -19,6 +19,12 @@
  * simple — it is treated as a plain custom cluster. */
 #define ESPIR_CLUSTER_ID            0xFC00
 
+/* Clusters in the 0xFC00-0xFFFF range are manufacturer-specific; Zigbee2MQTT/herdsman can
+ * only resolve them for INBOUND frames (reports/read-responses) when they carry a
+ * manufacturer code. The device registers/reports its attributes with this code and the
+ * Z2M converter declares the same `manufacturerCode`. Any value works as long as both match. */
+#define ESPIR_MANUF_CODE            0x1037
+
 /* ---- Attributes (server side) -------------------------------------------- */
 #define ESPIR_ATTR_SLOT_COUNT       0x0000  /* u8,  ro            */
 #define ESPIR_ATTR_ACTIVE_LEARN     0x0001  /* u8,  rw (0xFF idle)*/

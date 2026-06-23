@@ -46,8 +46,9 @@ static void *zcl_str(uint8_t *buf, const char *s)
 /* ---- attribute update + report (call with the Zigbee lock held) ----------- */
 static void set_attr(uint16_t id, void *val)
 {
-    esp_zb_zcl_set_attribute_val(ESPIR_ENDPOINT, ESPIR_CLUSTER_ID,
-                                 ESP_ZB_ZCL_CLUSTER_SERVER_ROLE, id, val, false);
+    esp_zb_zcl_set_manufacturer_attribute_val(ESPIR_ENDPOINT, ESPIR_CLUSTER_ID,
+                                              ESP_ZB_ZCL_CLUSTER_SERVER_ROLE,
+                                              ESPIR_MANUF_CODE, id, val, false);
 }
 
 static void report_attr(uint16_t attr_id)
@@ -60,7 +61,32 @@ static void report_attr(uint16_t attr_id)
     cmd.clusterID = ESPIR_CLUSTER_ID;
     cmd.attributeID = attr_id;
     cmd.direction = ESP_ZB_ZCL_CMD_DIRECTION_TO_CLI;
-    esp_zb_zcl_report_attr_cmd_req(&cmd);
+    cmd.manuf_specific = 1;
+    cmd.manuf_code = ESPIR_MANUF_CODE;
+    esp_err_t e = esp_zb_zcl_report_attr_cmd_req(&cmd);
+    if (e != ESP_OK) ESP_LOGW(TAG, "report attr 0x%04x -> %s", attr_id, esp_err_to_name(e));
+}
+
+/* Push every attribute to the coordinator so Z2M shows real values instead of "Null".
+ * Called shortly after (re)joining; runs in the Zigbee task context. */
+static void report_all(void)
+{
+    ESP_LOGI(TAG, "reporting all attributes to coordinator");
+    set_attr(ESPIR_ATTR_SLOT_COUNT, &s_slot_count);
+    set_attr(ESPIR_ATTR_FW_ROLE, &s_fw_role);
+    report_attr(ESPIR_ATTR_SLOT_COUNT);
+    report_attr(ESPIR_ATTR_FW_ROLE);
+    report_attr(ESPIR_ATTR_LEARN_STATUS);
+    report_attr(ESPIR_ATTR_LAST_SLOT);
+    report_attr(ESPIR_ATTR_LAST_KIND);
+    report_attr(ESPIR_ATTR_LAST_CARRIER);
+    report_attr(ESPIR_ATTR_LAST_CODE);
+}
+
+static void report_all_cb(uint8_t param)
+{
+    (void)param;
+    report_all();
 }
 
 /* ---- command actions (run in the Zigbee task via the action handler) ------- */
@@ -232,18 +258,20 @@ static esp_zb_ep_list_t *build_endpoint(void)
     esp_zb_identify_cluster_cfg_t id_cfg = {.identify_time = 0};
     esp_zb_attribute_list_t *identify = esp_zb_identify_cluster_create(&id_cfg);
 
+    /* Manufacturer-specific attributes (see ESPIR_MANUF_CODE) so Z2M can resolve the
+     * 0xFC00 cluster on inbound reports. */
     esp_zb_attribute_list_t *cust = esp_zb_zcl_attr_list_create(ESPIR_CLUSTER_ID);
-    const uint8_t ro = ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY;
+    const uint16_t mc = ESPIR_MANUF_CODE;
     const uint8_t ro_rep = ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY | ESP_ZB_ZCL_ATTR_ACCESS_REPORTING;
     const uint8_t rw = ESP_ZB_ZCL_ATTR_ACCESS_READ_WRITE;
-    esp_zb_custom_cluster_add_custom_attr(cust, ESPIR_ATTR_SLOT_COUNT,   ESP_ZB_ZCL_ATTR_TYPE_U8,           ro,     &s_slot_count);
-    esp_zb_custom_cluster_add_custom_attr(cust, ESPIR_ATTR_ACTIVE_LEARN, ESP_ZB_ZCL_ATTR_TYPE_U8,           rw,     &s_active_learn);
-    esp_zb_custom_cluster_add_custom_attr(cust, ESPIR_ATTR_LEARN_STATUS, ESP_ZB_ZCL_ATTR_TYPE_8BIT_ENUM,    ro_rep, &s_learn_status);
-    esp_zb_custom_cluster_add_custom_attr(cust, ESPIR_ATTR_LAST_SLOT,    ESP_ZB_ZCL_ATTR_TYPE_U8,           ro_rep, &s_last_slot);
-    esp_zb_custom_cluster_add_custom_attr(cust, ESPIR_ATTR_LAST_CODE,    ESP_ZB_ZCL_ATTR_TYPE_OCTET_STRING, ro_rep, s_last_code);
-    esp_zb_custom_cluster_add_custom_attr(cust, ESPIR_ATTR_LAST_KIND,    ESP_ZB_ZCL_ATTR_TYPE_8BIT_ENUM,    ro_rep, &s_last_kind);
-    esp_zb_custom_cluster_add_custom_attr(cust, ESPIR_ATTR_FW_ROLE,      ESP_ZB_ZCL_ATTR_TYPE_8BIT_ENUM,    ro,     &s_fw_role);
-    esp_zb_custom_cluster_add_custom_attr(cust, ESPIR_ATTR_LAST_CARRIER, ESP_ZB_ZCL_ATTR_TYPE_U16,          ro_rep, &s_last_carrier);
+    esp_zb_cluster_add_manufacturer_attr(cust, ESPIR_CLUSTER_ID, ESPIR_ATTR_SLOT_COUNT,   mc, ESP_ZB_ZCL_ATTR_TYPE_U8,           ro_rep, &s_slot_count);
+    esp_zb_cluster_add_manufacturer_attr(cust, ESPIR_CLUSTER_ID, ESPIR_ATTR_ACTIVE_LEARN, mc, ESP_ZB_ZCL_ATTR_TYPE_U8,           rw,     &s_active_learn);
+    esp_zb_cluster_add_manufacturer_attr(cust, ESPIR_CLUSTER_ID, ESPIR_ATTR_LEARN_STATUS, mc, ESP_ZB_ZCL_ATTR_TYPE_8BIT_ENUM,    ro_rep, &s_learn_status);
+    esp_zb_cluster_add_manufacturer_attr(cust, ESPIR_CLUSTER_ID, ESPIR_ATTR_LAST_SLOT,    mc, ESP_ZB_ZCL_ATTR_TYPE_U8,           ro_rep, &s_last_slot);
+    esp_zb_cluster_add_manufacturer_attr(cust, ESPIR_CLUSTER_ID, ESPIR_ATTR_LAST_CODE,    mc, ESP_ZB_ZCL_ATTR_TYPE_OCTET_STRING, ro_rep, s_last_code);
+    esp_zb_cluster_add_manufacturer_attr(cust, ESPIR_CLUSTER_ID, ESPIR_ATTR_LAST_KIND,    mc, ESP_ZB_ZCL_ATTR_TYPE_8BIT_ENUM,    ro_rep, &s_last_kind);
+    esp_zb_cluster_add_manufacturer_attr(cust, ESPIR_CLUSTER_ID, ESPIR_ATTR_FW_ROLE,      mc, ESP_ZB_ZCL_ATTR_TYPE_8BIT_ENUM,    ro_rep, &s_fw_role);
+    esp_zb_cluster_add_manufacturer_attr(cust, ESPIR_CLUSTER_ID, ESPIR_ATTR_LAST_CARRIER, mc, ESP_ZB_ZCL_ATTR_TYPE_U16,          ro_rep, &s_last_carrier);
 
     esp_zb_cluster_list_t *cl = esp_zb_zcl_cluster_list_create();
     esp_zb_cluster_list_add_basic_cluster(cl, basic, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE);
@@ -285,6 +313,7 @@ void esp_zb_app_signal_handler(esp_zb_app_signal_t *signal_struct)
                 esp_zb_bdb_start_top_level_commissioning(ESP_ZB_BDB_MODE_NETWORK_STEERING);
             } else {
                 ESP_LOGI(TAG, "rejoined existing network");
+                esp_zb_scheduler_alarm(report_all_cb, 0, 2000);
             }
         } else {
             ESP_LOGW(TAG, "stack start failed: %s", esp_err_to_name(st));
@@ -294,6 +323,7 @@ void esp_zb_app_signal_handler(esp_zb_app_signal_t *signal_struct)
         if (st == ESP_OK) {
             ESP_LOGI(TAG, "joined network (PAN 0x%04hx, ch %d)",
                      esp_zb_get_pan_id(), esp_zb_get_current_channel());
+            esp_zb_scheduler_alarm(report_all_cb, 0, 2000);
         } else {
             ESP_LOGW(TAG, "steering failed (%s), retrying", esp_err_to_name(st));
             esp_zb_scheduler_alarm(bdb_retry_cb, ESP_ZB_BDB_MODE_NETWORK_STEERING, 1000);

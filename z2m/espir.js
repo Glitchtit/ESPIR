@@ -22,18 +22,22 @@ const ea = exposes.access;
 const CLUSTER = 'espir';
 
 // ---- Custom cluster 0xFC00 (mirror of espir_proto.h) -----------------------
-const espirCluster = m.deviceAddCustomCluster(CLUSTER, {
+const ESPIR_CLUSTER_DEF = {
+    name: CLUSTER,            // REQUIRED: herdsman stores the def as-is; without a name,
+                              // getCluster() resolves inbound 0xFC00 reports to 'undefined'.
     ID: 0xfc00,
-    manufacturerCode: undefined, // private cluster, no manufacturer-specific framing
+    manufacturerCode: 0x1037, // must match ESPIR_MANUF_CODE in firmware (espir_proto.h)
+    // NOTE: each attribute needs an explicit `name` — herdsman returns the attribute object
+    // as-is and reads `.name` from it (it does NOT use the object key).
     attributes: {
-        slotCount: {ID: 0x0000, type: Zcl.DataType.UINT8},
-        activeLearnSlot: {ID: 0x0001, type: Zcl.DataType.UINT8},
-        learnStatus: {ID: 0x0002, type: Zcl.DataType.ENUM8},
-        lastSlot: {ID: 0x0003, type: Zcl.DataType.UINT8},
-        lastCode: {ID: 0x0004, type: Zcl.DataType.OCTET_STR},
-        lastKind: {ID: 0x0005, type: Zcl.DataType.ENUM8},
-        fwRole: {ID: 0x0006, type: Zcl.DataType.ENUM8},
-        lastCarrier: {ID: 0x0007, type: Zcl.DataType.UINT16},
+        slotCount: {ID: 0x0000, type: Zcl.DataType.UINT8, name: 'slotCount'},
+        activeLearnSlot: {ID: 0x0001, type: Zcl.DataType.UINT8, name: 'activeLearnSlot'},
+        learnStatus: {ID: 0x0002, type: Zcl.DataType.ENUM8, name: 'learnStatus'},
+        lastSlot: {ID: 0x0003, type: Zcl.DataType.UINT8, name: 'lastSlot'},
+        lastCode: {ID: 0x0004, type: Zcl.DataType.OCTET_STR, name: 'lastCode'},
+        lastKind: {ID: 0x0005, type: Zcl.DataType.ENUM8, name: 'lastKind'},
+        fwRole: {ID: 0x0006, type: Zcl.DataType.ENUM8, name: 'fwRole'},
+        lastCarrier: {ID: 0x0007, type: Zcl.DataType.UINT16, name: 'lastCarrier'},
     },
     commands: {
         learn: {ID: 0x00, parameters: [{name: 'slot', type: Zcl.DataType.UINT8}]},
@@ -59,33 +63,44 @@ const espirCluster = m.deviceAddCustomCluster(CLUSTER, {
         programCommit: {ID: 0x06, parameters: [{name: 'slot', type: Zcl.DataType.UINT8}]},
     },
     commandsResponse: {},
-});
+};
+const espirCluster = m.deviceAddCustomCluster(CLUSTER, ESPIR_CLUSTER_DEF);
 
 const LEARN_STATUS = {0: 'idle', 1: 'waiting', 2: 'captured', 3: 'failed'};
 const KIND = {0: 'raw', 1: 'nec'};
 const ROLE = {0: 'master', 1: 'slave'};
 
 // ---- fromZigbee: surface reported attributes -------------------------------
-const fzEspir = {
-    cluster: CLUSTER,
-    type: ['attributeReport', 'readResponse'],
-    convert: (model, msg, publish, options, meta) => {
-        const out = {};
-        const a = msg.data;
-        if (a.slotCount !== undefined) out.slot_count = a.slotCount;
-        if (a.activeLearnSlot !== undefined) out.active_learn_slot = a.activeLearnSlot;
-        if (a.learnStatus !== undefined) out.learn_status = LEARN_STATUS[a.learnStatus] ?? a.learnStatus;
-        if (a.lastSlot !== undefined) out.last_slot = a.lastSlot;
-        if (a.lastKind !== undefined) out.last_kind = KIND[a.lastKind] ?? a.lastKind;
-        if (a.fwRole !== undefined) out.fw_role = ROLE[a.fwRole] ?? a.fwRole;
-        if (a.lastCarrier !== undefined) out.last_carrier = a.lastCarrier;
-        if (a.lastCode !== undefined) {
-            const buf = Buffer.isBuffer(a.lastCode) ? a.lastCode : Buffer.from(a.lastCode);
-            out.last_code = buf.toString('hex'); // HA replication reads this hex blob
-        }
-        return out;
-    },
+// Handle both name-resolved (a.slotCount) and raw numeric-ID (a['0']) attribute keys,
+// because depending on how the custom cluster resolves, the inbound cluster may come in
+// as the name 'espir' OR the numeric ID 0xFC00 — we register a converter for each.
+const convertEspir = (msg) => {
+    const a = msg.data || {};
+    const g = (name, id) => (a[name] !== undefined ? a[name]
+        : (a[id] !== undefined ? a[id] : a[String(id)]));
+    const out = {};
+    let v;
+    if ((v = g('slotCount', 0)) !== undefined) out.slot_count = v;
+    if ((v = g('learnStatus', 2)) !== undefined) out.learn_status = LEARN_STATUS[v] ?? v;
+    if ((v = g('lastSlot', 3)) !== undefined) out.last_slot = v;
+    if ((v = g('lastCode', 4)) !== undefined) {
+        const buf = Buffer.isBuffer(v) ? v : Buffer.from(typeof v === 'string' ? v : (v.data || v));
+        out.last_code = buf.toString('hex'); // HA replication reads this hex blob
+    }
+    if ((v = g('lastKind', 5)) !== undefined) out.last_kind = KIND[v] ?? v;
+    if ((v = g('fwRole', 6)) !== undefined) out.fw_role = ROLE[v] ?? v;
+    if ((v = g('lastCarrier', 7)) !== undefined) out.last_carrier = v;
+    return out;
 };
+
+const mkFz = (cluster) => ({
+    cluster,
+    type: ['attributeReport', 'readResponse'],
+    convert: (model, msg, publish, options, meta) => convertEspir(msg),
+});
+
+const fzEspir = mkFz(CLUSTER);       // matches when the cluster resolves to the name 'espir'
+const fzEspirRaw = mkFz(0xfc00);     // matches when it stays the numeric cluster id
 
 // ---- toZigbee --------------------------------------------------------------
 // The custom cluster lives on endpoint 10, so always target that endpoint explicitly
@@ -150,8 +165,10 @@ const tzProgram = {
     },
 };
 
-// Read the custom-cluster attributes on join / reconfigure so status isn't "Null".
+// Register the custom cluster on the device (so inbound reports decode) and read the
+// attributes once so values populate immediately, not just after the first report.
 const espirConfigure = async (device, coordinatorEndpoint, definition) => {
+    try { device.addCustomCluster(CLUSTER, ESPIR_CLUSTER_DEF); } catch (e) {}
     const ep = device.getEndpoint(ESPIR_EP);
     if (ep) {
         try { await ep.read(CLUSTER, ATTRS); } catch (e) { /* device asleep or busy */ }
@@ -178,7 +195,7 @@ const masterDefinition = {
     vendor: 'ESPIR',
     description: 'ESP32-C6 Zigbee IR blaster — master (learn + store + transmit)',
     extend: [espirCluster],
-    fromZigbee: [fzEspir],
+    fromZigbee: [fzEspir, fzEspirRaw],
     toZigbee: [tzSlot, tzAction, tzLearn, tzSend, tzClear, tzProgram],
     configure: espirConfigure,
     exposes: [
@@ -196,7 +213,7 @@ const slaveDefinition = {
     vendor: 'ESPIR',
     description: 'ESP32-C6 Zigbee IR blaster — slave (transmit-only repeater)',
     extend: [espirCluster],
-    fromZigbee: [fzEspir],
+    fromZigbee: [fzEspir, fzEspirRaw],
     toZigbee: [tzSlot, tzAction, tzSend, tzClear, tzProgram],
     configure: espirConfigure,
     exposes: [
