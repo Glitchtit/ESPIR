@@ -7,6 +7,7 @@
 #include "freertos/queue.h"
 #include "esp_log.h"
 #include "esp_check.h"
+#include "esp_pm.h"
 #include "esp_zigbee_core.h"
 #include "zcl/esp_zigbee_zcl_power_config.h"
 #include "esp_adc/adc_oneshot.h"
@@ -521,6 +522,24 @@ void esp_zb_app_signal_handler(esp_zb_app_signal_t *signal_struct)
     }
 }
 
+#if CONFIG_PM_ENABLE
+/* Enable automatic light sleep. CONFIG_PM_ENABLE + tickless idle are necessary but NOT
+ * sufficient: without esp_pm_configure(.light_sleep_enable=true) (and with DFS auto-init off)
+ * the C6 idles at full clock and never powers down between polls, so the LiPo lasts ~a day
+ * instead of months. Mirrors the esp-zigbee / OpenThread sleepy-end-device reference examples. */
+static void espir_power_save_init(void)
+{
+    esp_pm_config_t pm = {
+        .max_freq_mhz = CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ,
+        .min_freq_mhz = CONFIG_XTAL_FREQ,
+#if CONFIG_FREERTOS_USE_TICKLESS_IDLE
+        .light_sleep_enable = true,
+#endif
+    };
+    ESP_ERROR_CHECK(esp_pm_configure(&pm));
+}
+#endif
+
 static void esp_zb_task(void *arg)
 {
     esp_zb_cfg_t zb_cfg;
@@ -532,7 +551,8 @@ static void esp_zb_task(void *arg)
         };
     } else {
 #if CONFIG_PM_ENABLE
-        esp_zb_sleep_enable(true);  /* sleepy end device (battery). Sleep API is ED-lib only. */
+        espir_power_save_init();     /* auto light sleep — without this the SED never powers down */
+        esp_zb_sleep_enable(true);   /* sleepy end device (battery). Sleep API is ED-lib only. */
 #endif
         zb_cfg = (esp_zb_cfg_t){
             .esp_zb_role = ESP_ZB_DEVICE_TYPE_ED,
