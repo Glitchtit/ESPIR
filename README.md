@@ -48,6 +48,56 @@ to fire eventually at their own nearby appliance.
 | `hardware/`              | BOM and wiring diagrams |
 | `docs/specs/`            | Design spec |
 
+## Wiring & pinout
+
+Pins are defaults — override in `idf.py menuconfig → ESPIR Configuration`. All grounds must
+be common. Full notes (caps, boost, battery sense) in
+[`hardware/wiring-master.md`](hardware/wiring-master.md) and
+[`hardware/wiring-slave.md`](hardware/wiring-slave.md).
+
+### Master — ESP32-C6-DevKitC-1 (USB powered)
+
+| Signal | C6 GPIO | Connects to |
+|--------|---------|-------------|
+| IR TX data | **GPIO5** | SZHJW `DAT` |
+| IR RX data | **GPIO4** | VS1838B `OUT` |
+| 5 V | `5V` pin | SZHJW `VCC` |
+| 3.3 V | `3V3` pin | VS1838B `VCC` — **3.3 V only** (output drives a GPIO) |
+| GND | any `GND` | SZHJW `GND` **and** VS1838B `GND` |
+
+```
+DevKitC-1                         SZHJW IR TX (2× 940nm emitters)
+  5V    ──────────────────────────► VCC
+  GPIO5 ──────────────────────────► DAT
+  GND ──────────────┬─────────────► GND
+                    │
+  3V3 ──────────────┼─────────────► VCC   VS1838B receiver (3.3 V ONLY)
+  GPIO4 ◄───────────┼──────────────── OUT
+  GND ──────────────┴─────────────► GND
+```
+
+Avoid GPIO12/13 (USB-Serial-JTAG) and strapping pins GPIO8/9/15.
+
+### Slave — Seeed XIAO ESP32-C6 (LiPo powered, transmit-only)
+
+No 5 V rail on battery, so the transmitter runs at battery voltage (~3.7–4.2 V → reduced
+range). No receiver.
+
+| Signal | XIAO pad | C6 GPIO | Connects to |
+|--------|----------|---------|-------------|
+| IR TX data | **D2** | GPIO2 | SZHJW `DAT` |
+| Power for IR TX | `BAT+` (or `5V` on USB) | — | SZHJW `VCC` |
+| GND | `GND` | — | SZHJW `GND` |
+| LiPo ± | `BAT+` / `BAT−` | — | 3.7 V LiPo cell (charges over USB-C) |
+
+```
+XIAO ESP32-C6                     SZHJW IR TX (2× 940nm emitters)
+  BAT+ ──────────────────────────► VCC   (≈3.7–4.2 V; reduced range)
+  D2 (GPIO2) ────────────────────► DAT
+  GND ───────────────────────────► GND
+  BAT+ / BAT− ◄──────────────────── 3.7 V LiPo cell
+```
+
 ## Build & flash
 
 Requires ESP-IDF v5.4+ (`. ~/esp/esp-idf/export.sh` to load the environment).
