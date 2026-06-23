@@ -99,12 +99,15 @@ static void do_send(uint8_t slot)
     }
     esp_err_t err;
     if (s_cfg.role == ESPIR_ROLE_MASTER) {
-        /* Master IR backend = YS-IRTM (NEC-only over UART). */
         if (code.kind != ESPIR_KIND_NEC) {
-            ESP_LOGW(TAG, "send: slot %u is RAW, YS-IRTM master can only send NEC", slot);
+            ESP_LOGW(TAG, "send: slot %u is RAW, master can only send NEC", slot);
             return;
         }
-        err = espir_irtm_send(code.nec[0], code.nec[1], code.nec[2]);
+        if (s_cfg.master_rmt_tx) {
+            err = espir_ir_send(&code);                 /* SZHJW via RMT — stronger emitter */
+        } else {
+            err = espir_irtm_send(code.nec[0], code.nec[1], code.nec[2]);  /* YS-IRTM emitter */
+        }
     } else {
         /* Slave IR backend = SZHJW + RMT (NEC re-encode or raw replay). */
         err = espir_ir_send(&code);

@@ -20,9 +20,10 @@ existing physical remotes and **replays** them on command, so HA buttons map 1:1
                        SLAVE (XIAO C6, LiPo, Sleepy End Device) --IR--> local appliance
 ```
 
-- **Master** (ESP32-C6-DevKitC-1, USB-powered Zigbee **Router**): learns and transmits NEC
-  codes via a **YS-IRTM** UART codec module (its own emitter + receiver), stores them in
-  NVS. Always-on, so it responds instantly and extends the Zigbee mesh.
+- **Master** (ESP32-C6-DevKitC-1, USB-powered Zigbee **Router**): **learns** NEC codes via a
+  **YS-IRTM** UART codec (its receiver) and **transmits** through a stronger **SZHJW**
+  dual-LED module (RMT); stores codes in NVS. Always-on, so it responds instantly and
+  extends the Zigbee mesh.
 - **Slave** (Seeed XIAO ESP32-C6, LiPo **Sleepy End Device**): transmit-only repeater for
   coverage in another spot, using the SZHJW dual-LED emitter (RMT). Receives learned codes
   from the master via a replication path.
@@ -64,29 +65,32 @@ be common. Full notes (caps, boost, battery sense) in
 
 ### Master — ESP32-C6-DevKitC-1 (USB powered) + YS-IRTM
 
-The master uses a **YS-IRTM** module: a self-contained NEC codec with its own IR emitter
-and receiver, talking **UART** (9600 8N1). It does both learn and transmit — no SZHJW or
-VS1838B on the master. (NEC-only; non-NEC remotes can't be learned here.)
+The master uses a **YS-IRTM** NEC codec (UART, 9600 8N1) for **learning**, and a stronger
+**SZHJW** dual-LED module (RMT) for **transmitting** (the YS-IRTM's own emitter is weak).
+NEC-only; non-NEC remotes can't be learned here.
 
 | Signal | C6 GPIO | Connects to |
 |--------|---------|-------------|
 | UART TX | **GPIO5** | YS-IRTM `RXD` |
 | UART RX | **GPIO4** | YS-IRTM `TXD` — **via a divider** (5 V → 3.3 V) |
-| 5 V | `5V` pin | YS-IRTM `5V` |
-| GND | any `GND` | YS-IRTM `GND` |
+| IR TX data | **GPIO6** | SZHJW `DAT` |
+| 5 V | `5V` pin | YS-IRTM `5V` **and** SZHJW `VCC` |
+| GND | any `GND` | YS-IRTM `GND` **and** SZHJW `GND` |
 
 ```
-DevKitC-1                         YS-IRTM (NEC codec, 5 V)
-  5V    ──────────────────────────► 5V
+DevKitC-1                         YS-IRTM (NEC codec, 5 V) — LEARN
   GPIO5 (TX) ────────────────────► RXD
   GPIO4 (RX) ◄───[ 10k ]──┬──────── TXD   (divider: TXD-10k-RX, RX-20k-GND)
                         [ 20k ]
-  GND ───────────────────┴────────► GND
+  GPIO6 ──────────────────┼───────► DAT   SZHJW dual-LED TX (5 V) — SEND
+  5V  ────────────────────┼───────► 5V / VCC (both modules)
+  GND ────────────────────┴───────► GND (both modules)
 ```
 
 The C6 is **not 5 V tolerant** — YS-IRTM `TXD` (5 V) must go through the divider into
-`GPIO4`. The C6's 3.3 V `TX` into YS-IRTM `RXD` is usually accepted directly. Avoid
-GPIO12/13 (USB-Serial-JTAG) and strapping pins GPIO8/9/15.
+`GPIO4`. The C6's 3.3 V `TX` into YS-IRTM `RXD` is usually accepted directly. Transmit goes
+through the SZHJW (`CONFIG_ESPIR_MASTER_USE_SZHJW`, default on). Avoid GPIO12/13
+(USB-Serial-JTAG) and strapping pins GPIO8/9/15.
 
 ### Slave — Seeed XIAO ESP32-C6 (LiPo powered, transmit-only)
 

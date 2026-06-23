@@ -5,11 +5,13 @@
 | Qty | Part | Notes |
 |-----|------|-------|
 | 1 | ESP32-C6-DevKitC-1 (or clone, 4 MB+ flash) | USB-powered; provides 5 V rail |
-| 1 | **YS-IRTM** NEC IR codec module (`GND/RXD/TXD/5V`) | self-contained emitter + receiver, UART 9600 8N1; does learn **and** transmit |
+| 1 | **YS-IRTM** NEC IR codec module (`GND/RXD/TXD/5V`) | used for **learning** (its receiver), UART 9600 8N1 |
+| 1 | **SZHJW** dual-LED IR transmitter (5 V, `DAT/VCC/GND`) | used for **transmitting** (RMT, stronger than the YS-IRTM emitter) |
 | 2 | resistors (~10 kΩ + 20 kΩ) | divider for YS-IRTM `TXD` (5 V) → C6 RX (3.3 V) |
 | — | jumper wires | — |
 
 The YS-IRTM only handles **NEC-family** remotes — that is the master's learning limitation.
+Its single emitter is weak, so the master transmits through the SZHJW dual-LED module instead.
 
 ## Slave unit (per extra coverage point)
 

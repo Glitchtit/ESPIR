@@ -25,4 +25,17 @@ config ESPIR_LEARN_TIMEOUT_MS
     int "Learn-mode timeout (ms)"
     default 15000
 
+config ESPIR_MASTER_USE_SZHJW
+    bool "Transmit via an SZHJW dual-LED module (RMT) instead of the YS-IRTM emitter"
+    default y
+    help
+        The YS-IRTM has a single, weak emitter. Enable this to drive a separate SZHJW
+        dual-LED transmitter from the RMT peripheral for stronger output / longer range.
+        The YS-IRTM is still used for learning (its receiver).
+
+config ESPIR_TX_GPIO
+    int "SZHJW transmitter DAT GPIO"
+    depends on ESPIR_MASTER_USE_SZHJW
+    default 6
+
 endmenu
