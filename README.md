@@ -74,5 +74,16 @@ cd slave  && idf.py set-target esp32c6 && idf.py build flash monitor
 
 ## Status
 
-Greenfield. See [`docs/specs/2026-06-23-espir-design.md`](docs/specs/2026-06-23-espir-design.md)
-for the design and current build phase.
+Firmware and host integration are written and **both apps build clean** for esp32c6
+(ESP-IDF v5.4, esp-zigbee-lib 1.6.8):
+
+- ✅ Shared components (`espir_ir` RMT TX/RX, `espir_codec` NEC+raw, `espir_store` NVS slots)
+- ✅ Master app — Zigbee Router, custom cluster `0xFC00`, learn FSM
+- ✅ Slave app — Zigbee Sleepy End Device, transmit-only
+- ✅ Z2M converter, HA replication script, hardware docs
+
+**Not yet verified on hardware** (needs the physical boards + your Z2M/HA): flashing,
+pairing, IR capture/replay, and code replication. See the verification steps in
+[`docs/specs/2026-06-23-espir-design.md`](docs/specs/2026-06-23-espir-design.md). Wire the
+master per [`hardware/wiring-master.md`](hardware/wiring-master.md) (you'll need the VS1838B
+receiver), flash, and run `idf.py monitor` to watch it learn.
