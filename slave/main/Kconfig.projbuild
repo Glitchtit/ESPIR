@@ -16,6 +16,14 @@ config ESPIR_SEND_HOLD_MS
         On send, the frame is retransmitted until this much time has elapsed (0 = single shot).
         Mimics holding the button so appliances that need several frames respond reliably.
 
+config ESPIR_BATTERY_ADC_GPIO
+    int "Battery sense ADC GPIO (BAT+ via 1:2 divider; XIAO A0 = GPIO0)"
+    default 0
+    range 0 6
+    help
+        ADC1 GPIO that reads the LiPo through a 200k:200k (1:2) divider from BAT+ to GND.
+        On the XIAO ESP32-C6 use A0 (GPIO0). Must be an ADC1 pin (GPIO0–6).
+
 config ESPIR_XIAO_EXT_ANTENNA
     bool "XIAO ESP32-C6: use external U.FL antenna (else onboard ceramic)"
     default n

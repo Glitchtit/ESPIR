@@ -10,6 +10,7 @@
 #define ESPIR_DEVICE_H
 
 #include <stdint.h>
+#include <stdbool.h>
 #include "espir_proto.h"
 
 typedef struct {
@@ -18,6 +19,8 @@ typedef struct {
     const char  *model;           /* Basic-cluster model string, e.g. "ESPIR-MASTER" */
     uint32_t     learn_timeout_ms;/* master only: how long learn mode waits for a key */
     uint32_t     send_hold_ms;    /* repeat each send for this long (mimics holding a remote key); 0 = single shot */
+    bool         battery;         /* expose the Power Config cluster + report LiPo level (slave) */
+    int          battery_adc_gpio;/* ADC1 GPIO reading the BAT+ ÷2 divider (XIAO A0 = GPIO0) */
 } espir_device_cfg_t;
 
 /* Starts the Zigbee stack task. Does not return control of the Zigbee stack; safe to call

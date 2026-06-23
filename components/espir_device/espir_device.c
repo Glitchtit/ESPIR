@@ -8,6 +8,10 @@
 #include "esp_log.h"
 #include "esp_check.h"
 #include "esp_zigbee_core.h"
+#include "zcl/esp_zigbee_zcl_power_config.h"
+#include "esp_adc/adc_oneshot.h"
+#include "esp_adc/adc_cali.h"
+#include "esp_adc/adc_cali_scheme.h"
 
 #include "espir_code.h"
 #include "espir_ir.h"
@@ -17,6 +21,7 @@ static const char *TAG = "espir_dev";
 
 #define ESPIR_ENDPOINT       10
 #define ESPIR_LAST_CODE_MAX  48   /* max last_code bytes that fit one ZCL report frame */
+#define ESPIR_SLEEP_GRACE_MS 12000 /* stay awake this long after boot so USB-JTAG flashing works */
 #define COORDINATOR_SHORT    0x0000
 #define COORDINATOR_ENDPOINT 1
 
@@ -34,6 +39,16 @@ static uint8_t  s_last_kind = ESPIR_KIND_RAW;
 static uint8_t  s_fw_role;
 static uint16_t s_last_carrier = ESPIR_CARRIER_DEFAULT_KHZ;
 static uint8_t  s_last_code[256];   /* ZCL octet string: [len][data...], max 255 payload */
+
+/* Power Config cluster backing (slave/battery). ZCL units: voltage=100mV, percent=0.5%. */
+static uint8_t  s_batt_voltage = 0xFF;   /* 0xFF = unknown until first sample */
+static uint8_t  s_batt_percent = 0xFF;
+static adc_oneshot_unit_handle_t s_adc;
+static adc_cali_handle_t s_adc_cali;
+static bool s_adc_ready;
+static bool s_batt_started;
+static void battery_cb(uint8_t param);
+static void battery_adc_init(int gpio);
 
 static uint8_t s_mfg_buf[32];
 static uint8_t s_model_buf[32];
@@ -85,12 +100,78 @@ static void report_all(void)
     report_attr(ESPIR_ATTR_LAST_KIND);
     report_attr(ESPIR_ATTR_LAST_CARRIER);
     report_attr(ESPIR_ATTR_LAST_CODE);
+    if (s_cfg.battery && !s_batt_started) {
+        s_batt_started = true;                       /* kick the periodic battery chain once joined */
+        esp_zb_scheduler_alarm(battery_cb, 0, 1000);
+    }
 }
 
 static void report_all_cb(uint8_t param)
 {
     (void)param;
     report_all();
+}
+
+/* ---- battery (slave): read the BAT+ ÷2 divider and report over the Power Config cluster ---- */
+#define ESPIR_BATT_PERIOD_MS  600000   /* re-sample + report every 10 min */
+#define ESPIR_BATT_MV_EMPTY   3300     /* LiPo ~0% (brown-out margin) */
+#define ESPIR_BATT_MV_FULL    4200     /* LiPo 100% */
+
+static void report_std_attr(uint16_t cluster_id, uint16_t attr_id)
+{
+    esp_zb_zcl_report_attr_cmd_t cmd = {0};
+    cmd.zcl_basic_cmd.src_endpoint = ESPIR_ENDPOINT;
+    cmd.zcl_basic_cmd.dst_endpoint = COORDINATOR_ENDPOINT;
+    cmd.zcl_basic_cmd.dst_addr_u.addr_short = COORDINATOR_SHORT;
+    cmd.address_mode = ESP_ZB_APS_ADDR_MODE_16_ENDP_PRESENT;
+    cmd.clusterID = cluster_id;
+    cmd.attributeID = attr_id;
+    cmd.direction = ESP_ZB_ZCL_CMD_DIRECTION_TO_CLI;
+    esp_zb_zcl_report_attr_cmd_req(&cmd);
+}
+
+static void battery_adc_init(int gpio)
+{
+    adc_oneshot_unit_init_cfg_t ucfg = { .unit_id = ADC_UNIT_1 };
+    if (adc_oneshot_new_unit(&ucfg, &s_adc) != ESP_OK) return;
+    adc_oneshot_chan_cfg_t ccfg = { .atten = ADC_ATTEN_DB_12, .bitwidth = ADC_BITWIDTH_DEFAULT };
+    if (adc_oneshot_config_channel(s_adc, (adc_channel_t)gpio, &ccfg) != ESP_OK) return;  /* C6: ADC1 ch == GPIO0..6 */
+    adc_cali_curve_fitting_config_t cal = { .unit_id = ADC_UNIT_1, .chan = (adc_channel_t)gpio,
+                                            .atten = ADC_ATTEN_DB_12, .bitwidth = ADC_BITWIDTH_DEFAULT };
+    if (adc_cali_create_scheme_curve_fitting(&cal, &s_adc_cali) != ESP_OK) return;
+    s_adc_ready = true;
+}
+
+static void battery_sample(void)
+{
+    if (!s_adc_ready) return;
+    int acc = 0, n = 0;
+    for (int i = 0; i < 16; i++) {
+        int raw, mv;
+        if (adc_oneshot_read(s_adc, (adc_channel_t)s_cfg.battery_adc_gpio, &raw) != ESP_OK) continue;
+        if (adc_cali_raw_to_voltage(s_adc_cali, raw, &mv) != ESP_OK) continue;
+        acc += mv; n++;
+    }
+    if (!n) return;
+    int vbat_mv = (acc / n) * 2;   /* undo the 1:2 divider */
+    int pct = (vbat_mv - ESPIR_BATT_MV_EMPTY) * 100 / (ESPIR_BATT_MV_FULL - ESPIR_BATT_MV_EMPTY);
+    if (pct < 0) pct = 0; else if (pct > 100) pct = 100;
+    s_batt_voltage = (uint8_t)((vbat_mv + 50) / 100);   /* 100mV units */
+    s_batt_percent = (uint8_t)(pct * 2);                /* 0.5% units */
+    esp_zb_zcl_set_attribute_val(ESPIR_ENDPOINT, ESP_ZB_ZCL_CLUSTER_ID_POWER_CONFIG,
+        ESP_ZB_ZCL_CLUSTER_SERVER_ROLE, ESP_ZB_ZCL_ATTR_POWER_CONFIG_BATTERY_VOLTAGE_ID, &s_batt_voltage, false);
+    esp_zb_zcl_set_attribute_val(ESPIR_ENDPOINT, ESP_ZB_ZCL_CLUSTER_ID_POWER_CONFIG,
+        ESP_ZB_ZCL_CLUSTER_SERVER_ROLE, ESP_ZB_ZCL_ATTR_POWER_CONFIG_BATTERY_PERCENTAGE_REMAINING_ID, &s_batt_percent, false);
+    report_std_attr(ESP_ZB_ZCL_CLUSTER_ID_POWER_CONFIG, ESP_ZB_ZCL_ATTR_POWER_CONFIG_BATTERY_VOLTAGE_ID);
+    report_std_attr(ESP_ZB_ZCL_CLUSTER_ID_POWER_CONFIG, ESP_ZB_ZCL_ATTR_POWER_CONFIG_BATTERY_PERCENTAGE_REMAINING_ID);
+    ESP_LOGI(TAG, "battery %d mV -> %d%%", vbat_mv, pct);
+}
+
+static void battery_cb(uint8_t param)
+{
+    (void)param;
+    battery_sample();
+    esp_zb_scheduler_alarm(battery_cb, 0, ESPIR_BATT_PERIOD_MS);   /* periodic */
 }
 
 /* ---- transmit (runs in its own task so a held send never blocks the Zigbee stack) ---- */
@@ -365,6 +446,14 @@ static esp_zb_ep_list_t *build_endpoint(void)
     esp_zb_cluster_list_add_identify_cluster(cl, identify, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE);
     esp_zb_cluster_list_add_custom_cluster(cl, cust, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE);
 
+    if (s_cfg.battery) {   /* LiPo level via the standard Power Configuration cluster */
+        esp_zb_power_config_cluster_cfg_t pcfg = {0};
+        esp_zb_attribute_list_t *power = esp_zb_power_config_cluster_create(&pcfg);
+        esp_zb_power_config_cluster_add_attr(power, ESP_ZB_ZCL_ATTR_POWER_CONFIG_BATTERY_VOLTAGE_ID, &s_batt_voltage);
+        esp_zb_power_config_cluster_add_attr(power, ESP_ZB_ZCL_ATTR_POWER_CONFIG_BATTERY_PERCENTAGE_REMAINING_ID, &s_batt_percent);
+        esp_zb_cluster_list_add_power_config_cluster(cl, power, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE);
+    }
+
     esp_zb_ep_list_t *ep = esp_zb_ep_list_create();
     esp_zb_endpoint_config_t epc = {
         .endpoint = ESPIR_ENDPOINT,
@@ -391,7 +480,9 @@ void esp_zb_app_signal_handler(esp_zb_app_signal_t *signal_struct)
     switch (sig) {
     case ESP_ZB_COMMON_SIGNAL_CAN_SLEEP:
 #if CONFIG_PM_ENABLE
-        if (s_joined) esp_zb_sleep_now();   /* only sleep after joining; stay awake to commission */
+        /* Sleep only after joining AND after a boot grace window — light sleep drops the native
+         * USB-Serial-JTAG, so the grace period keeps a flash/console window open every boot. */
+        if (s_joined && xTaskGetTickCount() >= pdMS_TO_TICKS(ESPIR_SLEEP_GRACE_MS)) esp_zb_sleep_now();
 #endif
         break;
     case ESP_ZB_ZDO_SIGNAL_SKIP_STARTUP:
@@ -466,6 +557,7 @@ void espir_device_start(const espir_device_cfg_t *cfg)
     s_learn_sem = xSemaphoreCreateBinary();
     s_send_q = xQueueCreate(4, sizeof(uint8_t));
     xTaskCreate(send_task, "espir_send", 4096, NULL, 5, NULL);
+    if (cfg->battery) battery_adc_init(cfg->battery_adc_gpio);
 
     esp_zb_platform_config_t pc = {
         .radio_config = {.radio_mode = ZB_RADIO_MODE_NATIVE},
