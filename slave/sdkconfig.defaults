@@ -1,0 +1,24 @@
+# --- Zigbee: Sleepy End Device ---
+CONFIG_ZB_ENABLED=y
+CONFIG_ZB_ZED=y
+CONFIG_ZB_RADIO_NATIVE=y
+
+# --- Partition table with Zigbee storage ---
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+CONFIG_PARTITION_TABLE_OFFSET=0x8000
+
+# --- Flash ---
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+CONFIG_ESPTOOLPY_FLASHSIZE="4MB"
+
+# --- Recommended for Zigbee timing ---
+CONFIG_FREERTOS_HZ=1000
+
+# --- Power management for battery sleepy end device ---
+# Enables the esp_zb_sleep_enable() path and tickless idle light sleep.
+# NOTE: measure real current — the esp-zigbee-sdk on C6 has a known light-sleep
+# current-draw issue; tune or pin SDK version if battery life disappoints.
+CONFIG_PM_ENABLE=y
+CONFIG_FREERTOS_USE_TICKLESS_IDLE=y
+CONFIG_PM_SLP_IRAM_OPT=y
