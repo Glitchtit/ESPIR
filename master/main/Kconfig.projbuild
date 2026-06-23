@@ -5,37 +5,16 @@ config ESPIR_SLOT_COUNT
     default 32
     range 1 64
 
-config ESPIR_IRTM_UART_NUM
-    int "YS-IRTM UART port number"
-    default 1
+config ESPIR_IR_TX_GPIO
+    int "SZHJW transmitter DAT GPIO"
+    default 6
 
-config ESPIR_IRTM_TX_GPIO
-    int "UART TX GPIO (C6 TX -> YS-IRTM RXD)"
-    default 5
-
-config ESPIR_IRTM_RX_GPIO
-    int "UART RX GPIO (C6 RX <- YS-IRTM TXD, via level divider)"
+config ESPIR_IR_RX_GPIO
+    int "VS1838B receiver OUT GPIO"
     default 4
-
-config ESPIR_IRTM_BAUD
-    int "YS-IRTM UART baud rate"
-    default 9600
 
 config ESPIR_LEARN_TIMEOUT_MS
     int "Learn-mode timeout (ms)"
     default 15000
-
-config ESPIR_MASTER_USE_SZHJW
-    bool "Transmit via an SZHJW dual-LED module (RMT) instead of the YS-IRTM emitter"
-    default y
-    help
-        The YS-IRTM has a single, weak emitter. Enable this to drive a separate SZHJW
-        dual-LED transmitter from the RMT peripheral for stronger output / longer range.
-        The YS-IRTM is still used for learning (its receiver).
-
-config ESPIR_TX_GPIO
-    int "SZHJW transmitter DAT GPIO"
-    depends on ESPIR_MASTER_USE_SZHJW
-    default 6
 
 endmenu

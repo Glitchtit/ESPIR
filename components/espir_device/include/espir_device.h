@@ -10,7 +10,6 @@
 #define ESPIR_DEVICE_H
 
 #include <stdint.h>
-#include <stdbool.h>
 #include "espir_proto.h"
 
 typedef struct {
@@ -18,8 +17,6 @@ typedef struct {
     const char  *manufacturer;    /* Basic-cluster manufacturer string, e.g. "ESPIR" */
     const char  *model;           /* Basic-cluster model string, e.g. "ESPIR-MASTER" */
     uint32_t     learn_timeout_ms;/* master only: how long learn mode waits for a key */
-    bool         master_rmt_tx;   /* master only: transmit via the SZHJW (RMT) instead of the
-                                     weaker YS-IRTM emitter. Requires espir_ir_init() in app. */
 } espir_device_cfg_t;
 
 /* Starts the Zigbee stack task. Does not return control of the Zigbee stack; safe to call

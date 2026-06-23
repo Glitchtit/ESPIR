@@ -5,13 +5,12 @@
 | Qty | Part | Notes |
 |-----|------|-------|
 | 1 | ESP32-C6-DevKitC-1 (or clone, 4 MB+ flash) | USB-powered; provides 5 V rail |
-| 1 | **YS-IRTM** NEC IR codec module (`GND/RXD/TXD/5V`) | used for **learning** (its receiver), UART 9600 8N1 |
-| 1 | **SZHJW** dual-LED IR transmitter (5 V, `DAT/VCC/GND`) | used for **transmitting** (RMT, stronger than the YS-IRTM emitter) |
-| 2 | resistors (~10 kΩ + 20 kΩ) | divider for YS-IRTM `TXD` (5 V) → C6 RX (3.3 V) |
+| 1 | **SZHJW** dual-LED IR transmitter (5 V, `DAT/VCC/GND`) | **transmitting** (RMT, software 38 kHz carrier) |
+| 1 | **VS1838B** / TSOP38238 38 kHz receiver | **learning** (RMT raw capture); power at 3.3 V |
 | — | jumper wires | — |
 
-The YS-IRTM only handles **NEC-family** remotes — that is the master's learning limitation.
-Its single emitter is weak, so the master transmits through the SZHJW dual-LED module instead.
+Master = SZHJW (send) + VS1838B (learn), both on the C6 RMT peripheral. Raw capture learns
+**any** remote protocol; NEC is auto-compacted. (The YS-IRTM module is no longer used.)
 
 ## Slave unit (per extra coverage point)
 
@@ -23,12 +22,11 @@ Its single emitter is weak, so the master transmits through the SZHJW dual-LED m
 | 1 | (optional) 3.3 V→5 V boost converter | only if slave IR range proves insufficient |
 
 The slave transmits with the SZHJW emitter driven by the C6's RMT peripheral (software
-38 kHz carrier). It re-encodes the NEC codes the master learned.
+38 kHz carrier). It replays the codes the master learned.
 
 ## Notes
 
-- **Level-shift the YS-IRTM `TXD`** into the C6 RX pin — the C6 is not 5 V tolerant. The C6's
-  3.3 V TX into the YS-IRTM `RXD` is usually fine as-is.
-- The SZHJW module (slave) has its own transistor driver; the 3.3 V GPIO drives the base fine.
-- A `~38–100 µF` cap across the SZHJW `VCC`/`GND` helps the LED current bursts, especially on
-  battery.
+- **Power the VS1838B at 3.3 V** (master) — its `OUT` drives a GPIO directly; never 5 V.
+- The SZHJW has its own transistor driver; the 3.3 V GPIO drives `DAT` fine. Run `VCC` at 5 V
+  (master) for full range; at battery voltage on the slave (reduced range).
+- A `~38–100 µF` cap across the SZHJW `VCC`/`GND` helps the LED current bursts.

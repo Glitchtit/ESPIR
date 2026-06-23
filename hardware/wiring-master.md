@@ -1,51 +1,42 @@
-# Wiring — Master (ESP32-C6-DevKitC-1 + YS-IRTM + SZHJW)
+# Wiring — Master (ESP32-C6-DevKitC-1 + SZHJW + VS1838B)
 
-The master uses two IR parts:
-- **YS-IRTM** — a self-contained NEC codec over **UART** (9600 8N1). Used for **learning**
-  (its receiver). Its own emitter is weak, so it is **not** used for transmitting.
-- **SZHJW** dual-LED transmitter on the **RMT** peripheral — used for **transmitting**
-  (software 38 kHz carrier, 5 V, much stronger / longer range).
+The master uses two simple IR parts straight on the ESP32-C6 **RMT** peripheral:
+- **SZHJW** dual-LED transmitter — **sending** (software 38 kHz carrier, 5 V, strong).
+- **VS1838B** (or TSOP38238) 38 kHz receiver — **learning** (raw capture). Powered at 3.3 V
+  so its output is GPIO-safe; no level shifter needed.
 
-USB-powered; both modules run from the board's 5 V pin.
+Raw capture learns essentially **any** remote; NEC is auto-compacted for cheap storage/replication.
+
+USB-powered. (The YS-IRTM module is no longer used.)
 
 ## Pin assignments (defaults — override in `menuconfig` → ESPIR Configuration)
 
 | Signal | C6 GPIO | Connects to |
 |--------|---------|-------------|
-| UART TX | **GPIO5** | YS-IRTM `RXD` |
-| UART RX | **GPIO4** | YS-IRTM `TXD` (through a level divider) |
 | IR TX data | **GPIO6** | SZHJW `DAT` |
-| 5 V | `5V` pin | YS-IRTM `5V` **and** SZHJW `VCC` |
-| GND | any `GND` | YS-IRTM `GND` **and** SZHJW `GND` |
+| IR RX data | **GPIO4** | VS1838B `OUT` |
+| 5 V | `5V` pin | SZHJW `VCC` |
+| 3.3 V | `3V3` pin | VS1838B `VCC` — **3.3 V only** (output drives a GPIO) |
+| GND | any `GND` | SZHJW `GND` **and** VS1838B `GND` |
 
 ```
-DevKitC-1                         YS-IRTM (NEC codec, 5 V) — LEARN
-  GPIO5 (UART TX) ───────────────► RXD
-  GPIO4 (UART RX) ◄───[ 10k ]──┬─── TXD
-                             [ 20k ]
-  5V ─────────────────┬───────────► 5V
-  GND ──────────┬──────┼──────────► GND
-                │      │
-DevKitC-1       │      └──────────► VCC   SZHJW dual-LED TX (5 V) — SEND
-  GPIO6 ────────┼─────────────────► DAT
-  GND ──────────┘─────────────────► GND
+DevKitC-1                         SZHJW dual-LED TX (5 V) — SEND
+  5V    ──────────────────────────► VCC
+  GPIO6 ──────────────────────────► DAT
+  GND ──────────────┬─────────────► GND
+                    │
+  3V3 ──────────────┼─────────────► VCC   VS1838B receiver (3.3 V ONLY) — LEARN
+  GPIO4 ◄───────────┼────────────── OUT
+  GND ──────────────┴─────────────► GND
 ```
 
-## Important notes
+## Notes
 
-- **Level shift on TXD.** The C6 is **not 5 V tolerant**. The YS-IRTM `TXD` idles/drives at
-  5 V, so put a divider between `TXD` and `GPIO4`: `TXD —10kΩ— GPIO4 —20kΩ— GND` gives ~3.3 V.
-  (A proper level-shifter works too.)
-- **C6 TX → YS-IRTM RXD** at 3.3 V is normally read as logic-high by the module; if learning
-  is flaky, add a level shifter here as well.
-- **UART port:** default `UART_NUM_1` (UART0 is the USB console — don't use it). GPIO4/5 are
-  free; avoid GPIO12/13 (USB-Serial-JTAG) and strapping pins GPIO8/9/15.
-- **NEC-only:** the YS-IRTM decodes/encodes NEC-family protocols (uPD6121, TC9012, …). Remotes
-  using RC5/RC6/Sony/AC protocols cannot be learned on the master.
-- **Transmit = SZHJW** (`CONFIG_ESPIR_MASTER_USE_SZHJW`, default on). Aim its two LEDs at the
-  appliance. To fall back to the YS-IRTM emitter instead, disable that option in `menuconfig`.
-  Only one transmitter fires per send (firing both would risk a double-press, e.g. a power
-  toggle cancelling itself).
-- A `~38–100 µF` cap across the SZHJW `VCC`/`GND` stiffens the LED current pulses.
-- The module's default UART address is `0xA1` (the firmware uses it); `0xFA` is the failsafe
-  address. Baud is configurable on the module (4800–57600) but the firmware expects 9600.
+- **Power the VS1838B at 3.3 V**, never 5 V — its `OUT` goes straight to `GPIO4`.
+- The SZHJW has its own transistor driver; the 3.3 V GPIO drives `DAT` fine. Put `VCC` at 5 V
+  for full ~1–3 m range; a `~38–100 µF` cap across `VCC`/`GND` stiffens the LED pulses.
+- Aim the VS1838B toward where you'll hold the remote; aim the SZHJW LEDs at the appliance.
+- Avoid GPIO12/13 (USB-Serial-JTAG) and strapping pins GPIO8/9/15. GPIO4/6 are clear.
+- **Learns any protocol** (raw envelope); NEC/RC5/etc. all work. No NEC-only limitation.
+- Logs/flashing go over the DevKitC's CH343 USB-UART port (console = UART0), not the native
+  USB-Serial-JTAG port — see `AGENTS.md`.
