@@ -1,55 +1,30 @@
 /*
- * ESPIR master — BENCH build (Phase 1).
- *
- * Temporary IR-only firmware to validate capture -> compact -> store -> replay on real
- * hardware before the Zigbee layer is added. It learns into slot 0 from whatever remote
- * you point at the receiver, prints what it captured, then transmits it back every few
- * seconds so you can confirm with the appliance (or a second receiver / scope).
- *
- * This file is replaced by the full Zigbee master in Phase 2.
+ * ESPIR master — USB-powered Zigbee Router. Learns IR codes from a remote (via the
+ * VS1838B receiver), stores them in NVS, transmits them on command, and exposes the
+ * custom cluster 0xFC00 to Zigbee2MQTT / Home Assistant.
  */
-#include <inttypes.h>
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
+#include "esp_err.h"
 #include "esp_log.h"
 #include "sdkconfig.h"
 
 #include "espir_ir.h"
 #include "espir_store.h"
+#include "espir_device.h"
 
-static const char *TAG = "espir-bench";
+static const char *TAG = "espir-master";
 
 void app_main(void)
 {
     ESP_ERROR_CHECK(espir_store_init());
     ESP_ERROR_CHECK(espir_ir_init(CONFIG_ESPIR_IR_TX_GPIO, CONFIG_ESPIR_IR_RX_GPIO));
+    ESP_LOGI(TAG, "ESPIR master: %d slots, tx=%d rx=%d",
+             espir_store_count(), CONFIG_ESPIR_IR_TX_GPIO, CONFIG_ESPIR_IR_RX_GPIO);
 
-    ESP_LOGI(TAG, "Point a remote at the receiver and press a key (learning slot 0)...");
-    espir_code_t code;
-    esp_err_t err = espir_ir_receive(&code, 20000);
-    if (err == ESP_OK) {
-        espir_code_try_compact(&code);
-        ESP_LOGI(TAG, "captured: kind=%s carrier=%ukHz symbols=%u",
-                 code.kind == ESPIR_KIND_NEC ? "NEC" : "RAW",
-                 code.carrier_khz, code.n_symbols);
-        if (code.kind == ESPIR_KIND_NEC) {
-            ESP_LOGI(TAG, "NEC bytes: %02x %02x %02x %02x",
-                     code.nec[0], code.nec[1], code.nec[2], code.nec[3]);
-        }
-        ESP_ERROR_CHECK(espir_store_save(0, &code));
-        ESP_LOGI(TAG, "stored in slot 0");
-    } else {
-        ESP_LOGW(TAG, "no code captured (%s) — will replay slot 0 if present",
-                 esp_err_to_name(err));
-    }
-
-    while (1) {
-        espir_code_t out;
-        if (espir_store_load(0, &out) == ESP_OK) {
-            ESP_LOGI(TAG, "replaying slot 0 (%s)", out.kind == ESPIR_KIND_NEC ? "NEC" : "RAW");
-            esp_err_t serr = espir_ir_send(&out);
-            if (serr != ESP_OK) ESP_LOGW(TAG, "send failed: %s", esp_err_to_name(serr));
-        }
-        vTaskDelay(pdMS_TO_TICKS(5000));
-    }
+    espir_device_cfg_t cfg = {
+        .role = ESPIR_ROLE_MASTER,
+        .manufacturer = "ESPIR",
+        .model = "ESPIR-MASTER",
+        .learn_timeout_ms = CONFIG_ESPIR_LEARN_TIMEOUT_MS,
+    };
+    espir_device_start(&cfg);
 }
