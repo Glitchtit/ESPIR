@@ -1,0 +1,20 @@
+menu "ESPIR Configuration"
+
+config ESPIR_SLOT_COUNT
+    int "Number of IR storage slots"
+    default 32
+    range 1 64
+
+config ESPIR_IR_TX_GPIO
+    int "IR transmitter DAT GPIO"
+    default 5
+
+config ESPIR_IR_RX_GPIO
+    int "IR receiver OUT GPIO"
+    default 4
+
+config ESPIR_LEARN_TIMEOUT_MS
+    int "Learn-mode timeout (ms)"
+    default 15000
+
+endmenu
