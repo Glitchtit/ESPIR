@@ -90,8 +90,9 @@ also adds a discrete RGB status LED (see below), so it has its own firmware targ
 | R_pd | Gate pulldown | **100 kΩ** (0603) — holds Q1 off while GPIO18 is hi-Z |
 | R_top, R_bot | Battery divider | **2× 55 kΩ** (or 56 kΩ E12), 1 % — `CONFIG_ESPIR_BATTERY_DIV_X100 = 200` |
 | C_res | Reservoir cap | **100 µF** low-ESR (47–220 µF, MLCC/tantalum) at the LED anodes |
-| C_dec | Decoupling | **100 nF** (0603) across `VBAT`/GND |
+| C_dec | Decoupling — 100 nF 0603 X7R (LCSC `C14663`) | across `VBAT`/GND, at the XIAO power pin |
 | J1 | JST 1.25 mm (MX1.25) 2P header — ZX-MX1.25-2PWT (LCSC `C7430468`) | LiPo connector to the XIAO `BAT+`/`BAT−` pads — **match the cell's plug & verify polarity** |
+| SW1 | SPDT slide switch, SMD — SS12D07VG6 (LCSC `C2939728`) | on/off: in series in the `BAT+` line (common + one throw) — see *Build notes* |
 
 ### Connections
 
@@ -106,6 +107,8 @@ on-module.
 | `GND` | `GND` | Q1 source, C_res −, C_dec −, R_bot, LED return (via Q1 drain) |
 
 ```
+ J1 (cell +) ──[ SW1 on/off ]──● VBAT (= XIAO BAT+)
+
  VBAT (BAT+) ──┬──[ R1 18Ω ]──▶|─ LED1 ┐
                │                        ├──┐
                ├──[ R2 18Ω ]──▶|─ LED2 ┘  │ drain
@@ -222,6 +225,13 @@ Connections (defaults — `menuconfig` → ESPIR Configuration → *RGB status L
   plug-in**: 1.25 mm LiPo plugs aren't polarity-standardised between vendors, and the XIAO `BAT+`
   pad feeds its charger directly, so a reversed cell can damage the board. Confirm the header's
   `BAT+` pin lines up with the cell's positive lead.
+- **On/off switch (SW1):** a slide switch in series in the `BAT+` line, between J1 and the XIAO
+  `BAT+` pad. OFF disconnects the cell, so there's **zero battery drain in storage**. It's a battery
+  *disconnect*, not a hard kill: the XIAO still runs from USB whenever it's plugged in (its own
+  USB-C feeds the regulator), and **charging only happens with SW1 ON** (charge current flows through
+  it). A ~300 mA-rated switch is plenty — `C_res` buffers the IR peaks, so SW1 only carries the burst
+  *average* (~100–150 mA) plus the XIAO's charge current. Wire common + one throw; leave the third
+  pin NC. Put SW1 on the cell side so `C_res`/`C_dec` and the divider all sit on the switched `VBAT`.
 - **Still no 5 V on battery**, so the LEDs run at `VBAT` and range is shorter than the 5 V master.
   If that isn't enough, the optional 3.3 V→5 V boost from the Notes above can feed `VBAT` of the
   LED leg (the GPIO/MOSFET gate stays at 3.3 V) — resize R1/R2 for the higher rail.
@@ -232,13 +242,15 @@ A full connection list for laying out / ERC-checking the board. Refdes use the s
 the functional names from the tables above map as: `R1/R2`=IR ballast, `R3`=`Rg`, `R4`=`R_pd`,
 `R5/R6`=battery divider, `R7`=`R_r`, `R8`=`R_g`, `R9`=`R_b`, `R10`=`R_v1`, `R11`=`R_v2`,
 `C1/C2`=`C_res`, `C3`=`C_dec`, `Q2/Q3/Q4`=`Q_r/Q_g/Q_b` (RGB colour FETs). The RGB LED is
-**common-anode** (anode on `VBAT`), switched low-side by Q2/Q3/Q4. XIAO pin numbers follow the
-24-pin module symbol (`+`/`−` = the bottom `BAT+`/`BAT−` pads).
+**common-anode** (anode on `VBAT`), switched low-side by Q2/Q3/Q4. SW1 is the on/off slide switch
+in series in the `BAT+` line (`VCELL` → `VBAT`). XIAO pin numbers follow the 24-pin module symbol
+(`+`/`−` = the bottom `BAT+`/`BAT−` pads).
 
 | Net | Pins |
 |-----|------|
 | **GND** | U1.GND(13), U1.GND(16), U1.−(24), CN1.2, Q1.S, Q2.S, Q3.S, Q4.S, R4.2, R6.2, R11.2, C1.−, C2.−, C3.− |
-| **VBAT** (BAT+; IR + RGB + XIAO supply) | U1.+(23), CN1.1, R1.1, R2.1, R5.1, RGB1.A, C1.+, C2.+, C3.+ |
+| **VCELL** (cell + before the switch) | CN1.1, SW1.2 (common) |
+| **VBAT** (switched BAT+; IR + RGB + XIAO) | U1.+(23), SW1.1 (throw), R1.1, R2.1, R5.1, RGB1.A, C1.+, C2.+, C3.+ |
 | **V5** (USB 5 V rail) | U1.5V(14), R10.1 |
 | **3V3** (regulator out; unused) | U1.3V3(12), U1.3V3(18) |
 | **IR_DRIVE** | U1.D10(11), R3.1 |
@@ -259,7 +271,8 @@ the functional names from the tables above map as: `R1/R2`=IR ballast, `R3`=`Rg`
 | **QB_D** | R9.2, Q4.D |
 
 **No-connect** (flag NC for ERC): U1 D2(3), D3(4), D4(5), D5(6), D6(7), MTCK(17), MTDI(15),
-MTDI(19), EN(20), MTMS(21), BOOT(22).
+MTDI(19), EN(20), MTMS(21), BOOT(22); SW1.3 (unused throw). SW1 pin 2 = common — verify against the
+SS12D07VG6 footprint.
 
 > Per IR leg: `VBAT → R(18 Ω) → LED.A → LED.K → Q1.D → Q1.S → GND` (ballast may sit either side of
 > the LED). Per RGB colour: `VBAT → RGB1 anode → colour die → Rx → Qx.D → Qx.S → GND`, gate from the

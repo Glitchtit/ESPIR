@@ -41,6 +41,7 @@ so confirm quantities at checkout.
 | 3 | 2N7002 N-MOSFET (SOT-23) | C8545 | RGB colour low-side switches (Basic) |
 | 1 | RGB LED, **common-anode** — Everlight 22-23C/R6GHBHW-C01/2C | C181865 | status: amber=searching, green=joined, blue=sending; anode → `VBAT`; Vf R 1.85 / G,B 2.9 V, 5 mA |
 | 1 | JST 1.25 mm (MX1.25) 2P header — ZX-MX1.25-2PWT | C7430468 | LiPo connector; match the cell's plug, verify polarity vs `BAT+` (or your SHOU HAN `SH-MX1.25-2PWT`) |
+| 1 | SPDT slide switch, SMD — SS12D07VG6 | C2939728 | on/off; in series in the `BAT+` line (battery disconnect) |
 | 2 | 18 Ω ¼ W resistor | Basic | IR ballast, one per IR LED |
 | 1 | 470 Ω resistor | Basic | red LED ballast (R_r) |
 | 2 | 220 Ω resistor | Basic | green/blue LED ballast (R_g/R_b) |
@@ -49,7 +50,7 @@ so confirm quantities at checkout.
 | 2 | 56.9 kΩ 1 % resistor | Basic | battery divider → GPIO0 (`CONFIG_ESPIR_BATTERY_DIV_X100 = 200`; 56 kΩ also fine) |
 | 2 | 100 kΩ + 150 kΩ resistor | Basic | VBUS-sense divider → GPIO1 |
 | 2 | 100 µF cap (≥6.3 V) | Basic | `VBAT` reservoir for the IR pulse bursts |
-| 1 | 100 nF cap | Basic | decoupling |
+| 1 | 100 nF cap (0603 X7R) | C14663 | decoupling (C3), placed at the XIAO `5V`/`3V3` pin (Basic) |
 
 The RGB status LED is driven by the dedicated `slave-pcb/` firmware (LEDC PWM on three GPIOs). Each
 colour is switched low-side by a 2N7002 with the LED's common anode on `VBAT`, because the green/blue
