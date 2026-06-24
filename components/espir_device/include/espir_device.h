@@ -28,4 +28,19 @@ typedef struct {
  * once and let app_main return. */
 void espir_device_start(const espir_device_cfg_t *cfg);
 
+/* High-level device state, surfaced for an optional status indicator (e.g. an RGB LED on the
+ * custom-PCB slave). Purely advisory — the device works fine with no callback registered. */
+typedef enum {
+    ESPIR_STATUS_BOOT      = 0,  /* powered up, stack not yet commissioning            */
+    ESPIR_STATUS_SEARCHING = 1,  /* network steering in progress / retrying            */
+    ESPIR_STATUS_CONNECTED = 2,  /* joined the network and idle                        */
+    ESPIR_STATUS_SENDING   = 3,  /* actively transmitting an IR frame                  */
+} espir_status_t;
+
+/* Register a callback invoked on every device-state transition. Pass NULL to disable.
+ * The callback may run from the Zigbee task or the send task, so keep it short and
+ * non-blocking (the espir_led implementation just latches the state and wakes its own task).
+ * Default: no callback, so master/breadboard-slave builds are unaffected. */
+void espir_device_set_status_cb(void (*cb)(espir_status_t status));
+
 #endif /* ESPIR_DEVICE_H */

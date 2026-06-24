@@ -31,6 +31,10 @@ static SemaphoreHandle_t  s_learn_sem;
 static QueueHandle_t      s_send_q;   /* slot numbers to transmit, off the Zigbee task */
 static volatile bool s_joined;   /* sleepy ED: only sleep once joined (commissioning must stay awake) */
 
+/* Optional status indicator (e.g. RGB LED). NULL on master/breadboard-slave builds. */
+static void (*s_status_cb)(espir_status_t);
+static void notify_status(espir_status_t s) { if (s_status_cb) s_status_cb(s); }
+
 /* Custom-cluster attribute backing storage. */
 static uint8_t  s_slot_count;
 static uint8_t  s_active_learn = ESPIR_SLOT_IDLE;
@@ -192,6 +196,7 @@ static void send_worker(uint8_t slot)
     TickType_t hold  = pdMS_TO_TICKS(s_cfg.send_hold_ms);
     int frames = 0;
     esp_err_t err;
+    notify_status(ESPIR_STATUS_SENDING);   /* rapid-blink the indicator for the burst */
     do {
         err = espir_ir_send(&code);
         if (err != ESP_OK) break;
@@ -199,6 +204,7 @@ static void send_worker(uint8_t slot)
         if ((xTaskGetTickCount() - start) >= hold) break;
         vTaskDelay(pdMS_TO_TICKS(ESPIR_SEND_GAP_MS));
     } while ((xTaskGetTickCount() - start) < hold);
+    notify_status(ESPIR_STATUS_CONNECTED); /* sends only happen while joined */
     if (err != ESP_OK) ESP_LOGW(TAG, "send slot %u failed: %s", slot, esp_err_to_name(err));
     else ESP_LOGI(TAG, "sent slot %u (%d frames over %ums)", slot, frames, (unsigned)s_cfg.send_hold_ms);
 }
@@ -495,10 +501,12 @@ void esp_zb_app_signal_handler(esp_zb_app_signal_t *signal_struct)
         if (st == ESP_OK) {
             if (esp_zb_bdb_is_factory_new()) {
                 ESP_LOGI(TAG, "factory new — start network steering");
+                notify_status(ESPIR_STATUS_SEARCHING);
                 esp_zb_bdb_start_top_level_commissioning(ESP_ZB_BDB_MODE_NETWORK_STEERING);
             } else {
                 ESP_LOGI(TAG, "rejoined existing network");
                 s_joined = true;
+                notify_status(ESPIR_STATUS_CONNECTED);
                 esp_zb_scheduler_alarm(report_all_cb, 0, 2000);
             }
         } else {
@@ -510,9 +518,11 @@ void esp_zb_app_signal_handler(esp_zb_app_signal_t *signal_struct)
             ESP_LOGI(TAG, "joined network (PAN 0x%04hx, ch %d)",
                      esp_zb_get_pan_id(), esp_zb_get_current_channel());
             s_joined = true;
+            notify_status(ESPIR_STATUS_CONNECTED);
             esp_zb_scheduler_alarm(report_all_cb, 0, 2000);
         } else {
             ESP_LOGW(TAG, "steering failed (%s), retrying", esp_err_to_name(st));
+            notify_status(ESPIR_STATUS_SEARCHING);
             esp_zb_scheduler_alarm(bdb_retry_cb, ESP_ZB_BDB_MODE_NETWORK_STEERING, 1000);
         }
         break;
@@ -572,6 +582,11 @@ static void esp_zb_task(void *arg)
     esp_zb_set_primary_network_channel_set(ESP_ZB_TRANSCEIVER_ALL_CHANNELS_MASK);
     ESP_ERROR_CHECK(esp_zb_start(false));
     esp_zb_stack_main_loop();
+}
+
+void espir_device_set_status_cb(void (*cb)(espir_status_t status))
+{
+    s_status_cb = cb;
 }
 
 void espir_device_start(const espir_device_cfg_t *cfg)

@@ -1,0 +1,26 @@
+# --- Zigbee: End Device ---
+CONFIG_ZB_ENABLED=y
+CONFIG_ZB_ZED=y
+CONFIG_ZB_RADIO_NATIVE=y
+
+# --- Partition table with Zigbee storage ---
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+CONFIG_PARTITION_TABLE_OFFSET=0x8000
+
+# --- Flash ---
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+CONFIG_ESPTOOLPY_FLASHSIZE="4MB"
+
+# --- Recommended for Zigbee timing ---
+CONFIG_FREERTOS_HZ=1000
+
+# --- Console on the native USB-Serial-JTAG (so logs appear on /dev/ttyACM0) ---
+CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
+
+# --- Power management (battery sleepy end device) ---
+# Sleep is join-safe in firmware: the device only sleeps after it has joined (CAN_SLEEP is
+# ignored during commissioning), so it both joins reliably and saves power afterwards.
+CONFIG_PM_ENABLE=y
+CONFIG_FREERTOS_USE_TICKLESS_IDLE=y
+CONFIG_PM_SLP_IRAM_OPT=y

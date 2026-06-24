@@ -49,8 +49,10 @@ to fire eventually at their own nearby appliance.
 | `components/espir_store` | NVS slot store (save/load/clear, chunked program) |
 | `components/espir_zcl`   | Custom ZCL cluster `0xFC00` contract (`espir_proto.h`) |
 | `components/espir_device`| Zigbee device: endpoint, cluster server, learn FSM (shared) |
+| `components/espir_led`   | RGB status LED (LEDC PWM) for the custom-PCB slave |
 | `master/`                | ESP-IDF app: VS1838B learn + SZHJW transmit (Router) |
 | `slave/`                 | ESP-IDF app: SZHJW transmit + program/send (Sleepy End Device) |
+| `slave-pcb/`             | Custom-PCB slave: discrete MOSFET IR driver + RGB status LED |
 | `z2m/espir.js`           | Zigbee2MQTT external converter (mirrors the cluster contract) |
 | `homeassistant/`         | Replication script + example button entities |
 | `hardware/`              | BOM and wiring diagrams |
@@ -124,6 +126,9 @@ cd master && idf.py set-target esp32c6 && idf.py build flash monitor
 
 # Slave (on the XIAO C6)
 cd slave  && idf.py set-target esp32c6 && idf.py build flash monitor
+
+# Custom-PCB slave (XIAO C6 + discrete IR driver + RGB status LED)
+cd slave-pcb && idf.py set-target esp32c6 && idf.py build flash monitor
 ```
 
 ## Pairing & usage

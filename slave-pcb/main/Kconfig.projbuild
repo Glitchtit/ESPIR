@@ -1,0 +1,76 @@
+menu "ESPIR Configuration"
+
+config ESPIR_SLOT_COUNT
+    int "Number of IR storage slots"
+    default 32
+    range 1 64
+
+config ESPIR_IR_TX_GPIO
+    int "IR transmitter DAT GPIO (drives the MOSFET gate on the custom PCB)"
+    default 18
+
+config ESPIR_SEND_HOLD_MS
+    int "Send hold time (ms) — repeat each send this long, like holding a remote key"
+    default 300
+    help
+        On send, the frame is retransmitted until this much time has elapsed (0 = single shot).
+        Mimics holding the button so appliances that need several frames respond reliably.
+
+config ESPIR_BATTERY_ADC_GPIO
+    int "Battery sense ADC GPIO (BAT+ via 1:2 divider; XIAO A0 = GPIO0)"
+    default 0
+    range 0 6
+    help
+        ADC1 GPIO that reads the LiPo through a 200k:200k (1:2) divider from BAT+ to GND.
+        On the XIAO ESP32-C6 use A0 (GPIO0). Must be an ADC1 pin (GPIO0–6).
+
+config ESPIR_BATTERY_DIV_X100
+    int "Battery divider ratio ×100 = (R_top + R_bottom) * 100 / R_bottom"
+    default 200
+    help
+        200 = a 1:2 divider (two equal resistors, e.g. 1M:1M or 200k:200k). For unequal
+        resistors compute (R_top + R_bottom) * 100 / R_bottom, e.g. 1M(top):55k(bottom) = 1918.
+        R_top goes from BAT+ to the ADC pin; R_bottom from the ADC pin to GND.
+
+config ESPIR_XIAO_EXT_ANTENNA
+    bool "XIAO ESP32-C6: use external U.FL antenna (else onboard ceramic)"
+    default n
+    help
+        The XIAO ESP32-C6 has an RF switch: GPIO3 must be LOW to enable it, and GPIO14
+        selects the antenna (LOW = onboard ceramic, HIGH = external U.FL). Without this the
+        radio can't reach the network. Enable this only if you've attached the U.FL antenna.
+
+menu "RGB status LED (custom PCB)"
+
+config ESPIR_LED_R_GPIO
+    int "RGB LED red GPIO (XIAO D7 = GPIO17)"
+    default 17
+
+config ESPIR_LED_G_GPIO
+    int "RGB LED green GPIO (XIAO D8 = GPIO19)"
+    default 19
+
+config ESPIR_LED_B_GPIO
+    int "RGB LED blue GPIO (XIAO D9 = GPIO20)"
+    default 20
+
+config ESPIR_LED_COMMON_ANODE
+    bool "RGB LED is common-anode (active-low). Unset = common-cathode (active-high)."
+    default n
+    help
+        Common-anode LEDs share the positive pin and light when the GPIO is driven LOW, so the
+        firmware inverts the PWM duty. Common-cathode LEDs share GND and light on a HIGH GPIO.
+
+config ESPIR_LED_VBUS_GPIO
+    int "USB-present (VBUS) sense GPIO; -1 disables USB gating (XIAO D1 = GPIO1)"
+    default 1
+    range -1 23
+    help
+        Digital input that reads HIGH when USB power is present (via a divider from the XIAO 5V
+        pad). The solid-green CONNECTED state lights only while USB is detected, so a steady LED
+        can't drain the LiPo on a sleepy end device. Set to -1 to disable USB gating entirely
+        (green stays lit on battery too — expect days, not months, of battery life).
+
+endmenu
+
+endmenu
