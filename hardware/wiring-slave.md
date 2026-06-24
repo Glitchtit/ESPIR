@@ -84,14 +84,14 @@ also adds a discrete RGB status LED (see below), so it has its own firmware targ
 |-----|------|---------------|
 | U1 | Seeed XIAO ESP32-C6 (LCSC `C9900124963`) | reflowed on castellations; supplies `BAT+`, `GND`, drives GPIO18/GPIO0 |
 | Q1 | **AO3400A** N-MOSFET, SOT-23 (LCSC `C20917`) | logic-level: Vgs(th) ≤ ~1.5 V, Id ≥ 0.5 A, low Rds(on) @ Vgs = 3.3 V (SI2302 / DMN2075U equiv.) |
-| LED1, LED2 | 940 nm IR LED — M3030E1IRS6G45-940 (`Vf` 1.4–2.0 V @ 350 mA, `If` 350 mA) | TCWIN; in parallel, each via its own ballast — confirm the C# on its LCSC page |
+| U2, U3 | 940 nm IR LED — M3030E1IRS6G45-940 (`Vf` 1.4–2.0 V @ 350 mA, `If` 350 mA) | TCWIN; in parallel, each via its own ballast — confirm the C# on its LCSC page |
 | R1, R2 | Ballast resistor | **18 Ω, ≥ ¼ W** (1206 or axial) — one per LED |
-| Rg | Gate series resistor | **100 Ω** (0603) — tames the gate edge into GPIO18 |
-| R_pd | Gate pulldown | **100 kΩ** (0603) — holds Q1 off while GPIO18 is hi-Z |
-| R_top, R_bot | Battery divider | **2× 55 kΩ** (or 56 kΩ E12), 1 % — `CONFIG_ESPIR_BATTERY_DIV_X100 = 200` |
-| C_res | Reservoir cap | **100 µF** low-ESR (47–220 µF, MLCC/tantalum) at the LED anodes |
-| C_dec | Decoupling — 100 nF 0603 X7R (LCSC `C14663`) | across `VBAT`/GND, at the XIAO power pin |
-| J1 | JST 1.25 mm (MX1.25) 2P header — ZX-MX1.25-2PWT (LCSC `C7430468`) | LiPo connector to the XIAO `BAT+`/`BAT−` pads — **match the cell's plug & verify polarity** |
+| R3 | Gate series resistor | **100 Ω** (0603) — tames the gate edge into GPIO18 |
+| R4 | Gate pulldown | **100 kΩ** (0603) — holds Q1 off while GPIO18 is hi-Z |
+| R5, R6 | Battery divider | **2× 56.9 kΩ** (or 56 kΩ), 1 % — `CONFIG_ESPIR_BATTERY_DIV_X100 = 200` |
+| C1, C2 | Reservoir caps | **100 µF** low-ESR (47–220 µF, MLCC/tantalum) at the LED anodes |
+| C3 | Decoupling — 100 nF 0603 X7R (LCSC `C14663`) | across `VBAT`/GND, at the XIAO power pin |
+| CN1 | JST 1.25 mm (MX1.25) 2P header — ZX-MX1.25-2PWT (LCSC `C7430468`) | LiPo connector to the XIAO `BAT+`/`BAT−` pads — **match the cell's plug & verify polarity** |
 | SW1 | SPDT slide switch, SMD — SS12D07VG6 (LCSC `C2939728`) | on/off: in series in the `BAT+` line (common + one throw) — see *Build notes* |
 
 ### Connections
@@ -101,30 +101,30 @@ on-module.
 
 | XIAO pad | Net | Goes to |
 |----------|-----|---------|
-| `BAT+` | `VBAT` | R1/R2 (LED anodes), C_res +, C_dec +, R_top (divider) |
-| `D10` (GPIO18) | `IR_DRIVE` | Rg → Q1 gate (R_pd gate→GND) |
-| `A0`/`D0` (GPIO0) | `BATT_SENSE` | divider mid-point (R_top / R_bot) |
-| `GND` | `GND` | Q1 source, C_res −, C_dec −, R_bot, LED return (via Q1 drain) |
+| `BAT+` | `VBAT` | R1/R2 (LED anodes), C1/C2 +, C3 +, R5 (divider) — fed via SW1 from CN1 |
+| `D10` (GPIO18) | `IR_DRIVE` | R3 → Q1 gate (R4 gate→GND) |
+| `A0`/`D0` (GPIO0) | `BATT_SENSE` | divider mid-point (R5 / R6) |
+| `GND` | `GND` | Q1 source, C1/C2 −, C3 −, R6, LED return (via Q1 drain) |
 
 ```
- J1 (cell +) ──[ SW1 on/off ]──● VBAT (= XIAO BAT+)
+ CN1 (cell +) ──[ SW1 on/off ]──● VBAT  (= XIAO BAT+ pad)
 
- VBAT (BAT+) ──┬──[ R1 18Ω ]──▶|─ LED1 ┐
-               │                        ├──┐
-               ├──[ R2 18Ω ]──▶|─ LED2 ┘  │ drain
-               │                          ┌┴┐
-               ├──[ C_res 100µF ]── GND   │Q│ Q1  AO3400 (N-MOSFET, low-side)
-               ├──[ C_dec 100nF ]── GND   └┬┘
-               │                           │ source
-               └──[ R_top 55kΩ ]──┬──► A0/GPIO0 (batt sense)
-                                  │        │
-                              [ R_bot 55kΩ ]
-                                  │       GND
-                                 GND
+ VBAT ─┬──[ R1 18Ω ]──▶|─ U2 ─┐
+       ├──[ R2 18Ω ]──▶|─ U3 ─┴─► Q1 drain   (Q1 = AO3400 low-side N-MOSFET;
+       │                                         source → GND, gate ← R3)
+       ├──[ C1 100µF ]── GND
+       ├──[ C2 100µF ]── GND
+       ├──[ C3 100nF ]── GND      ← decoupling, place at the XIAO power pin
+       │
+       └──[ R5 56.9kΩ ]──┬──► A0/GPIO0 (batt sense)
+                         │
+                     [ R6 56.9kΩ ]
+                         │
+                        GND
 
- D10/GPIO18 ──[ Rg 100Ω ]──┬──────────────► Q1 gate
+ D10/GPIO18 ──[ R3 100Ω ]──┬──► Q1 gate
                            │
-                       [ R_pd 100kΩ ]
+                       [ R4 100kΩ ]
                            │
                           GND
 ```
@@ -154,49 +154,49 @@ headroom. The MOSFETs keep the firmware **active-high** (GPIO high → FET on �
 
 | Ref | Part | Value / notes |
 |-----|------|---------------|
-| LED3 | RGB LED, **common-anode** — Everlight 22-23C/R6GHBHW-C01/2C (LCSC `C181865`) | anode → `VBAT`; Vf R 1.85 / G,B 2.9 V, 5 mA; verify the colour-cathode pad order |
-| Q_r, Q_g, Q_b | N-MOSFET, SOT-23 — 2N7002 (LCSC `C8545`) | low-side switch, one per colour; gate ← D7/D8/D9 |
-| R_r | Red ballast | **470 Ω** — `(4.0−1.85)/470 ≈ 4.6 mA` |
-| R_g, R_b | Green/blue ballast | **220 Ω** — `(4.0−2.9)/220 ≈ 5.0 mA` (≈ the LED's 5 mA nominal) |
-| R_v1, R_v2 | VBUS-sense divider | **100 kΩ** (top, from `5V`) : **150 kΩ** (bottom) → ~3.0 V |
+| LED1 | RGB LED, **common-anode** — Everlight 22-23C/R6GHBHW-C01/2C (LCSC `C181865`) | anode → `VBAT`; Vf R 1.85 / G,B 2.9 V, 5 mA; verify the colour-cathode pad order |
+| Q2, Q3, Q4 | N-MOSFET, SOT-23 — 2N7002 (LCSC `C8545`) | low-side switch, one per colour (R/G/B); gate ← D7/D8/D9 |
+| R7 | Red ballast | **470 Ω** — `(4.0−1.85)/470 ≈ 4.6 mA` |
+| R8, R9 | Green/blue ballast | **220 Ω** — `(4.0−2.9)/220 ≈ 5.0 mA` (≈ the LED's 5 mA nominal) |
+| R10, R11 | VBUS-sense divider | **100 kΩ** (top, from `5V`) : **150 kΩ** (bottom) → ~3.0 V |
 
 Connections (defaults — `menuconfig` → ESPIR Configuration → *RGB status LED*):
 
 | XIAO pad | C6 GPIO | Net | Goes to |
 |----------|---------|-----|---------|
-| D7 | GPIO17 | LED_R | Q_r gate (drain → R_r → LED red cathode) |
-| D8 | GPIO19 | LED_G | Q_g gate (drain → R_g → LED green cathode) |
-| D9 | GPIO20 | LED_B | Q_b gate (drain → R_b → LED blue cathode) |
+| D7 | GPIO17 | LED_R | Q2 gate (drain → R7 → LED1 red cathode) |
+| D8 | GPIO19 | LED_G | Q3 gate (drain → R8 → LED1 green cathode) |
+| D9 | GPIO20 | LED_B | Q4 gate (drain → R9 → LED1 blue cathode) |
 | D1 | GPIO1 | VBUS_SENSE | divider mid-point (`5V` ÷ ~1.67) |
-| `BAT+` | — | VBAT | LED common anode |
-| `GND` | — | GND | Q_r/Q_g/Q_b sources |
+| `BAT+` | — | VBAT | LED1 common anode |
+| `GND` | — | GND | Q2/Q3/Q4 sources |
 
 ```
-  XIAO 5V ──[ R_v1 100kΩ ]──┬──► D1/GPIO1   (USB present → HIGH; 0 V on battery)
-                            │
-                        [ R_v2 150kΩ ]
-                            │
-                           GND
+  XIAO 5V ──[ R10 100kΩ ]──┬──► D1/GPIO1   (USB present → HIGH; 0 V on battery)
+                           │
+                       [ R11 150kΩ ]
+                           │
+                          GND
 
-  VBAT ──● LED3 common anode
-         ├─ red   ──[ R_r 470Ω ]──┐
-         ├─ green ──[ R_g 220Ω ]──┼─┐
-         └─ blue  ──[ R_b 220Ω ]──┼─┼─┐   (drains)
-                                  │ │ │
-  D7/GPIO17 ──gate─ Q_r ──────────┘ │ │
-  D8/GPIO19 ──gate─ Q_g ────────────┘ │
-  D9/GPIO20 ──gate─ Q_b ──────────────┘
-                     └── all sources → GND
+  VBAT ──● LED1 common anode
+         ├─ red   ──[ R7 470Ω ]──┐
+         ├─ green ──[ R8 220Ω ]──┼─┐
+         └─ blue  ──[ R9 220Ω ]──┼─┼─┐   (drains)
+                                 │ │ │
+  D7/GPIO17 ──gate─ Q2 ──────────┘ │ │
+  D8/GPIO19 ──gate─ Q3 ────────────┘ │
+  D9/GPIO20 ──gate─ Q4 ──────────────┘
+                    └── all sources → GND
 ```
 
 > Pins recap (custom PCB): IR = D10/GPIO18, batt sense = D0/GPIO0, LED gates = D7/D8/D9, VBUS = D1.
-> D2–D6 stay free. Gate pulldowns on Q_r/Q_g/Q_b are optional — LEDC drives the gates low within a
+> D2–D6 stay free. Gate pulldowns on Q2/Q3/Q4 are optional — LEDC drives the gates low within a
 > few ms of boot and holds them low in light sleep; add 100 kΩ gate→GND only to kill boot-flicker.
 
 ### Build notes
 
 - **Gate pulldown is not optional on a battery device.** While the XIAO boots or deep-sleeps,
-  GPIO18 is high-impedance; R_pd (100 kΩ) keeps Q1 off so the LEDs can't sit half-on and quietly
+  GPIO18 is high-impedance; R4 (100 kΩ) keeps Q1 off so the LEDs can't sit half-on and quietly
   drain the cell.
 - **Ballast sizing:** `R = (VBAT − Vf − Vds(on)) / I`. With Vf ≈ 1.5 V @ 150 mA and Vds(on) ≈ 0,
   `(4.2 − 1.5) / 0.15 ≈ 18 Ω`. Current tapers to ~100 mA at a 3.3 V cell — range falls gracefully
@@ -207,67 +207,67 @@ Connections (defaults — `menuconfig` → ESPIR Configuration → *RGB status L
 - **More range if needed:** the 940 nm emitters are rated 350 mA continuous, so 18 Ω (~150 mA)
   is deliberately conservative for battery life. If the appliance doesn't respond reliably, drop
   the ballast for more reach — ≈10 Ω → ~250 mA or ≈8.2 Ω → ~300 mA per LED — but then use ½ W
-  ballasts and a larger `C_res` to feed the bigger (2× peak) bursts without sagging the cell.
+  ballasts and larger `C1/C2` to feed the bigger (2× peak) bursts without sagging the cell.
 
   | Ballast | ~Peak / LED | Resistor | Trade-off |
   |---------|-------------|----------|-----------|
   | **18 Ω** | ~150 mA | ¼ W | default — longest battery life |
   | ~10 Ω | ~250 mA | ½ W | more range |
-  | ~8.2 Ω | ~300 mA | ½ W | near the 350 mA rating; size `C_res` for the bursts |
+  | ~8.2 Ω | ~300 mA | ½ W | near the 350 mA rating; size `C1/C2` for the bursts |
 - **Reservoir cap** supplies the ~300 mA pulse bursts (2 LEDs × 150 mA) so the small LiPo doesn't
   sag and brown out the XIAO — same reason the SZHJW build wants a cap, more important here.
 - **XIAO as SMD:** the module has 2×7 castellated edge pads (2.54 mm pitch) plus two `BAT+`/`BAT−`
   pads on the underside. Reflow on the castellations and add matching pads (or a cutout) under the
   BAT pads on your carrier. Keep the USB-C edge clear of the board outline for charging/flashing.
   Seeed publishes a KiCad/EAGLE "XIAO" footprint you can drop in.
-- **Battery connector (J1):** these cells use a **JST 1.25 mm (MX1.25) 2P** plug — a 1.25 mm-pitch
+- **Battery connector (CN1):** these cells use a **JST 1.25 mm (MX1.25) 2P** plug — a 1.25 mm-pitch
   part, *not* the 2.0 mm JST-PH. Fit the matching MX1.25 header and **check polarity before first
   plug-in**: 1.25 mm LiPo plugs aren't polarity-standardised between vendors, and the XIAO `BAT+`
   pad feeds its charger directly, so a reversed cell can damage the board. Confirm the header's
   `BAT+` pin lines up with the cell's positive lead.
-- **On/off switch (SW1):** a slide switch in series in the `BAT+` line, between J1 and the XIAO
+- **On/off switch (SW1):** a slide switch in series in the `BAT+` line, between CN1 and the XIAO
   `BAT+` pad. OFF disconnects the cell, so there's **zero battery drain in storage**. It's a battery
   *disconnect*, not a hard kill: the XIAO still runs from USB whenever it's plugged in (its own
   USB-C feeds the regulator), and **charging only happens with SW1 ON** (charge current flows through
-  it). A ~300 mA-rated switch is plenty — `C_res` buffers the IR peaks, so SW1 only carries the burst
+  it). A ~300 mA-rated switch is plenty — `C1/C2` buffers the IR peaks, so SW1 only carries the burst
   *average* (~100–150 mA) plus the XIAO's charge current. Wire common + one throw; leave the third
-  pin NC. Put SW1 on the cell side so `C_res`/`C_dec` and the divider all sit on the switched `VBAT`.
+  pin NC. Put SW1 on the cell side so `C1/C2`/`C3` and the divider all sit on the switched `VBAT`.
 - **Still no 5 V on battery**, so the LEDs run at `VBAT` and range is shorter than the 5 V master.
   If that isn't enough, the optional 3.3 V→5 V boost from the Notes above can feed `VBAT` of the
   LED leg (the GPIO/MOSFET gate stays at 3.3 V) — resize R1/R2 for the higher rail.
 
 ### Netlist (refdes + nets)
 
-A full connection list for laying out / ERC-checking the board. Refdes use the schematic scheme;
-the functional names from the tables above map as: `R1/R2`=IR ballast, `R3`=`Rg`, `R4`=`R_pd`,
-`R5/R6`=battery divider, `R7`=`R_r`, `R8`=`R_g`, `R9`=`R_b`, `R10`=`R_v1`, `R11`=`R_v2`,
-`C1/C2`=`C_res`, `C3`=`C_dec`, `Q2/Q3/Q4`=`Q_r/Q_g/Q_b` (RGB colour FETs). The RGB LED is
-**common-anode** (anode on `VBAT`), switched low-side by Q2/Q3/Q4. SW1 is the on/off slide switch
-in series in the `BAT+` line (`VCELL` → `VBAT`). XIAO pin numbers follow the 24-pin module symbol
-(`+`/`−` = the bottom `BAT+`/`BAT−` pads).
+A full connection list for laying out / ERC-checking the board, using the same refdes as the
+schematic: U1 = XIAO, U2/U3 = IR LEDs, Q1 = IR FET, Q2/Q3/Q4 = RGB colour FETs, LED1 = RGB LED,
+R1/R2 = IR ballast, R3/R4 = IR gate series/pulldown, R5/R6 = battery divider, R7/R8/R9 = RGB
+ballasts, R10/R11 = VBUS divider, C1/C2 = reservoir, C3 = decoupling, CN1 = battery connector,
+SW1 = on/off. The RGB LED is **common-anode** (anode on `VBAT`), switched low-side by Q2/Q3/Q4.
+SW1 is in series in the `BAT+` line (`VCELL` → `VBAT`). XIAO pin numbers follow the 24-pin module
+symbol (`+`/`−` = the bottom `BAT+`/`BAT−` pads).
 
 | Net | Pins |
 |-----|------|
 | **GND** | U1.GND(13), U1.GND(16), U1.−(24), CN1.2, Q1.S, Q2.S, Q3.S, Q4.S, R4.2, R6.2, R11.2, C1.−, C2.−, C3.− |
 | **VCELL** (cell + before the switch) | CN1.1, SW1.2 (common) |
-| **VBAT** (switched BAT+; IR + RGB + XIAO) | U1.+(23), SW1.1 (throw), R1.1, R2.1, R5.1, RGB1.A, C1.+, C2.+, C3.+ |
+| **VBAT** (switched BAT+; IR + RGB + XIAO) | U1.+(23), SW1.1 (throw), R1.1, R2.1, R5.1, LED1.A, C1.+, C2.+, C3.+ |
 | **V5** (USB 5 V rail) | U1.5V(14), R10.1 |
 | **3V3** (regulator out; unused) | U1.3V3(12), U1.3V3(18) |
 | **IR_DRIVE** | U1.D10(11), R3.1 |
 | **GATE** | R3.2, Q1.G, R4.1 |
-| **IRLED1_A** | R1.2, LED1.A |
-| **IRLED2_A** | R2.2, LED2.A |
-| **IR_RTN** (drain) | Q1.D, LED1.K, LED2.K |
+| **IR_U2_A** | R1.2, U2.A |
+| **IR_U3_A** | R2.2, U3.A |
+| **IR_RTN** (drain) | Q1.D, U2.K, U3.K |
 | **BATT_SENSE** | R5.2, R6.1, U1.D0(1) |
 | **VBUS_SENSE** | R10.2, R11.1, U1.D1(2) |
 | **LEDR_G** (red gate) | U1.D7(8), Q2.G |
-| **RGB_R** | RGB1.R, R7.1 |
+| **RGB_R** | LED1.R, R7.1 |
 | **QR_D** | R7.2, Q2.D |
 | **LEDG_G** (green gate) | U1.D8(9), Q3.G |
-| **RGB_G** | RGB1.G, R8.1 |
+| **RGB_G** | LED1.G, R8.1 |
 | **QG_D** | R8.2, Q3.D |
 | **LEDB_G** (blue gate) | U1.D9(10), Q4.G |
-| **RGB_B** | RGB1.B, R9.1 |
+| **RGB_B** | LED1.B, R9.1 |
 | **QB_D** | R9.2, Q4.D |
 
 **No-connect** (flag NC for ERC): U1 D2(3), D3(4), D4(5), D5(6), D6(7), MTCK(17), MTDI(15),
@@ -275,6 +275,6 @@ MTDI(19), EN(20), MTMS(21), BOOT(22); SW1.3 (unused throw). SW1 pin 2 = common �
 SS12D07VG6 footprint.
 
 > Per IR leg: `VBAT → R(18 Ω) → LED.A → LED.K → Q1.D → Q1.S → GND` (ballast may sit either side of
-> the LED). Per RGB colour: `VBAT → RGB1 anode → colour die → Rx → Qx.D → Qx.S → GND`, gate from the
+> the LED). Per RGB colour: `VBAT → LED1 anode → colour die → Rx → Qx.D → Qx.S → GND`, gate from the
 > D-pin. The FETs make the LED **active-high**, so keep `CONFIG_ESPIR_LED_COMMON_ANODE=n` despite the
 > common-anode package. Optional 100 kΩ gate→GND pulldowns on Q2/Q3/Q4 kill any boot-flicker.
