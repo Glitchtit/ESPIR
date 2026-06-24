@@ -84,7 +84,7 @@ also adds a discrete RGB status LED (see below), so it has its own firmware targ
 |-----|------|---------------|
 | U1 | Seeed XIAO ESP32-C6 | reflowed on castellations; supplies `BAT+`, `GND`, drives GPIO18/GPIO0 |
 | Q1 | N-channel logic-level MOSFET, SOT-23 | **AO3400A** (or SI2302 / DMN2075U): Vgs(th) ≤ ~1.5 V, Id ≥ 0.5 A, low Rds(on) @ Vgs = 3.3 V |
-| LED1, LED2 | 940 nm IR LED | same emitters as the SZHJW; in parallel, each via its own ballast |
+| LED1, LED2 | 940 nm IR LED (e.g. M3030…940 nm, `Vf` 1.4–2.0 V @ 350 mA, `If` 350 mA) | in parallel, each via its own ballast |
 | R1, R2 | Ballast resistor | **18 Ω, ≥ ¼ W** (1206 or axial) — one per LED |
 | Rg | Gate series resistor | **100 Ω** (0603) — tames the gate edge into GPIO18 |
 | R_pd | Gate pulldown | **100 kΩ** (0603) — holds Q1 off while GPIO18 is hi-Z |
@@ -190,6 +190,16 @@ Connections (defaults — `menuconfig` → ESPIR Configuration → *RGB status L
   during the ~300 ms `CONFIG_ESPIR_SEND_HOLD_MS` send window, so a ¼ W part runs cool. To rescale:
   pick your per-LED current `I`, recompute `R`, and confirm `R`'s wattage ≥ `I²·R`. For more LEDs,
   add a parallel `R + LED` leg each (Q1 carries the sum — AO3400A is good for well over 1 A).
+- **More range if needed:** the 940 nm emitters are rated 350 mA continuous, so 18 Ω (~150 mA)
+  is deliberately conservative for battery life. If the appliance doesn't respond reliably, drop
+  the ballast for more reach — ≈10 Ω → ~250 mA or ≈8.2 Ω → ~300 mA per LED — but then use ½ W
+  ballasts and a larger `C_res` to feed the bigger (2× peak) bursts without sagging the cell.
+
+  | Ballast | ~Peak / LED | Resistor | Trade-off |
+  |---------|-------------|----------|-----------|
+  | **18 Ω** | ~150 mA | ¼ W | default — longest battery life |
+  | ~10 Ω | ~250 mA | ½ W | more range |
+  | ~8.2 Ω | ~300 mA | ½ W | near the 350 mA rating; size `C_res` for the bursts |
 - **Reservoir cap** supplies the ~300 mA pulse bursts (2 LEDs × 150 mA) so the small LiPo doesn't
   sag and brown out the XIAO — same reason the SZHJW build wants a cap, more important here.
 - **XIAO as SMD:** the module has 2×7 castellated edge pads (2.54 mm pitch) plus two `BAT+`/`BAT−`
