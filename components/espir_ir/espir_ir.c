@@ -63,7 +63,10 @@ esp_err_t espir_ir_init(int tx_gpio, int rx_gpio)
 
     rmt_copy_encoder_config_t cec = {0};
     ESP_RETURN_ON_ERROR(rmt_new_copy_encoder(&cec, &s_copy_enc), TAG, "copy encoder");
-    ESP_RETURN_ON_ERROR(rmt_enable(s_tx), TAG, "tx enable");
+    /* Leave the TX channel DISABLED until an actual send. An enabled RMT channel holds a
+     * CPU_FREQ_MAX power-management lock for its whole lifetime, which blocks light sleep — so
+     * a battery slave that enabled it at boot could never sleep. espir_ir_send() enables it just
+     * for the transmit and disables it again. */
 
     if (rx_gpio >= 0) {
         s_rx_queue = xQueueCreate(2, sizeof(rmt_rx_done_event_data_t));
@@ -121,21 +124,25 @@ esp_err_t espir_ir_send(const espir_code_t *code)
         n = code->n_symbols;
     }
 
+    /* Channel is idle/disabled between sends; carrier is applied while disabled (required). */
     uint16_t want = code->carrier_khz ? code->carrier_khz : ESPIR_CARRIER_DEFAULT_KHZ;
     if (want != s_carrier_khz) {
-        ESP_RETURN_ON_ERROR(rmt_disable(s_tx), TAG, "tx disable");
         ESP_RETURN_ON_ERROR(apply_carrier(want), TAG, "recarrier");
-        ESP_RETURN_ON_ERROR(rmt_enable(s_tx), TAG, "tx reenable");
         s_carrier_khz = want;
     }
 
     int nsym = pack_symbols(dur, n);
     if (nsym < 0) return ESP_ERR_INVALID_SIZE;
 
+    /* Enable only for the transmit, then disable, so the RMT CPU_FREQ_MAX PM lock is held only
+     * during the send and a battery slave can light-sleep the rest of the time. */
+    ESP_RETURN_ON_ERROR(rmt_enable(s_tx), TAG, "tx enable");
     rmt_transmit_config_t tcfg = { .loop_count = 0 };
-    ESP_RETURN_ON_ERROR(rmt_transmit(s_tx, s_copy_enc, s_tx_syms,
-                                     nsym * sizeof(rmt_symbol_word_t), &tcfg), TAG, "transmit");
-    return rmt_tx_wait_all_done(s_tx, 1000);
+    esp_err_t err = rmt_transmit(s_tx, s_copy_enc, s_tx_syms,
+                                 nsym * sizeof(rmt_symbol_word_t), &tcfg);
+    if (err == ESP_OK) err = rmt_tx_wait_all_done(s_tx, 1000);
+    rmt_disable(s_tx);   /* release the PM lock even if the transmit failed */
+    return err;
 }
 
 #define IR_HEADER_MIN_US 2000   /* NEC ~9000, Samsung ~4500, most ACs have a long leading mark */

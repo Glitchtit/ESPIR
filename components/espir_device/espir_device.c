@@ -561,6 +561,12 @@ static void esp_zb_task(void *arg)
         };
     }
     esp_zb_init(&zb_cfg);
+    if (s_cfg.role == ESPIR_ROLE_SLAVE) {
+        /* Sleepy end device: the radio must be OFF when idle (poll the parent for traffic).
+         * esp_zb_sleep_enable() only enables the sleep feature; without this the ED joins with
+         * rx_on_when_idle=true, keeps the radio on continuously, and never sleeps. */
+        esp_zb_set_rx_on_when_idle(false);
+    }
     esp_zb_device_register(build_endpoint());
     esp_zb_core_action_handler_register(action_handler);
     esp_zb_set_primary_network_channel_set(ESP_ZB_TRANSCEIVER_ALL_CHANNELS_MASK);
