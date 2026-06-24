@@ -18,7 +18,7 @@ Master = SZHJW (send) + VS1838B (learn), both on the C6 RMT peripheral. Raw capt
 |-----|------|-------|
 | 1 | Seeed XIAO ESP32-C6 | onboard LiPo charging + battery pads |
 | 1 | SZHJW dual-LED IR transmitter module | 5 V, `DAT/VCC/GND`, 940 nm, no internal carrier; runs at battery voltage (reduced range) — **breadboard/jumper-wire build** |
-| 1 | 3.7 V LiPo cell | with JST connector to match the XIAO BAT pads |
+| 1 | 3.7 V LiPo cell | JST 1.25 mm (MX1.25) 2P plug; breadboard build solders the leads to the XIAO `BAT+`/`BAT−` pads (mind polarity) |
 | 1 | (optional) 3.3 V→5 V boost converter | only if slave IR range proves insufficient |
 
 The slave transmits with the SZHJW emitter driven by the C6's RMT peripheral (software
@@ -40,7 +40,7 @@ module). See `hardware/wiring-slave.md` → *Custom PCB* for the schematic and s
 | 2 | 55 kΩ (or 56 kΩ), 1 % | battery divider → GPIO0 (`CONFIG_ESPIR_BATTERY_DIV_X100 = 200`) |
 | 1 | 100 µF low-ESR cap | reservoir for the LED pulse bursts |
 | 1 | 100 nF cap | decoupling |
-| 1 | (optional) JST-PH 2.0 | LiPo connector |
+| 1 | JST 1.25 mm (MX1.25) 2P header | LiPo connector — match the cell's plug; verify polarity vs `BAT+` |
 | 1 | RGB LED (common-cathode or -anode) | status: amber=searching, green=joined, blue=sending |
 | 3 | LED series resistors | ~330 Ω (red), ~150 Ω (green/blue) — `LED_R/G/B` on GPIO17/19/20 |
 | 2 | VBUS-sense divider (100 kΩ + 150 kΩ) | USB-present sense on GPIO1; gates the steady green off on battery |

@@ -91,7 +91,7 @@ also adds a discrete RGB status LED (see below), so it has its own firmware targ
 | R_top, R_bot | Battery divider | **2× 55 kΩ** (or 56 kΩ E12), 1 % — `CONFIG_ESPIR_BATTERY_DIV_X100 = 200` |
 | C_res | Reservoir cap | **100 µF** low-ESR (47–220 µF, MLCC/tantalum) at the LED anodes |
 | C_dec | Decoupling | **100 nF** (0603) across `VBAT`/GND |
-| J1 | (optional) JST-PH 2.0 | LiPo connector to the XIAO `BAT+`/`BAT−` pads |
+| J1 | JST 1.25 mm (MX1.25) 2P header | LiPo connector to the XIAO `BAT+`/`BAT−` pads — **match the cell's plug & verify polarity** |
 
 ### Connections
 
@@ -196,6 +196,11 @@ Connections (defaults — `menuconfig` → ESPIR Configuration → *RGB status L
   pads on the underside. Reflow on the castellations and add matching pads (or a cutout) under the
   BAT pads on your carrier. Keep the USB-C edge clear of the board outline for charging/flashing.
   Seeed publishes a KiCad/EAGLE "XIAO" footprint you can drop in.
+- **Battery connector (J1):** these cells use a **JST 1.25 mm (MX1.25) 2P** plug — a 1.25 mm-pitch
+  part, *not* the 2.0 mm JST-PH. Fit the matching MX1.25 header and **check polarity before first
+  plug-in**: 1.25 mm LiPo plugs aren't polarity-standardised between vendors, and the XIAO `BAT+`
+  pad feeds its charger directly, so a reversed cell can damage the board. Confirm the header's
+  `BAT+` pin lines up with the cell's positive lead.
 - **Still no 5 V on battery**, so the LEDs run at `VBAT` and range is shorter than the 5 V master.
   If that isn't enough, the optional 3.3 V→5 V boost from the Notes above can feed `VBAT` of the
   LED leg (the GPIO/MOSFET gate stays at 3.3 V) — resize R1/R2 for the higher rail.
