@@ -105,7 +105,7 @@ static void fb_clear(void) { memset(s_fb, 0, FB_BYTES); }
 /* Draw text at cell (x_px, page). 6 px per char; clips at the right edge. */
 static void fb_text(int x_px, int page, const char *s)
 {
-    if (page < 0 || page >= OLED_PAGES) return;
+    if (page < 0 || page >= OLED_PAGES || x_px < 0) return;
     for (; *s && x_px <= OLED_W - 6; s++, x_px += 6) {
         const uint8_t *g = glyph_for(*s);
         for (int col = 0; col < 5; col++)
@@ -193,6 +193,8 @@ esp_err_t espir_oled_init(const espir_oled_cfg_t *cfg)
 {
     ESP_RETURN_ON_FALSE(cfg, ESP_ERR_INVALID_ARG, TAG, "cfg");
 
+    esp_err_t ret = ESP_OK;
+
     i2c_master_bus_config_t bus_cfg = {
         .i2c_port = cfg->i2c_port,
         .sda_io_num = cfg->sda_gpio,
@@ -208,27 +210,37 @@ esp_err_t espir_oled_init(const espir_oled_cfg_t *cfg)
         .device_address = cfg->i2c_addr,
         .scl_speed_hz = 400000,
     };
-    ESP_RETURN_ON_ERROR(i2c_master_bus_add_device(s_bus, &dev_cfg, &s_dev), TAG, "i2c dev");
+    /* From here on, unwind the bus/device on failure so the panel-absent path (a probe
+     * NACK) leaves no half-initialised I2C peripheral behind. */
+    ESP_GOTO_ON_ERROR(i2c_master_bus_add_device(s_bus, &dev_cfg, &s_dev), fail_bus, TAG, "i2c dev");
 
     /* Probe: if the panel doesn't ACK, bail so the caller skips the display. */
-    ESP_RETURN_ON_ERROR(i2c_master_probe(s_bus, cfg->i2c_addr, I2C_TIMEOUT_MS), TAG,
-                        "no SSD1306 at 0x%02x", cfg->i2c_addr);
+    ESP_GOTO_ON_ERROR(i2c_master_probe(s_bus, cfg->i2c_addr, I2C_TIMEOUT_MS), fail_dev, TAG,
+                      "no SSD1306 at 0x%02x", cfg->i2c_addr);
 
     for (size_t i = 0; i < sizeof(SSD1306_INIT); i++)
-        ESP_RETURN_ON_ERROR(ssd1306_cmd(SSD1306_INIT[i]), TAG, "init[%zu]", i);
+        ESP_GOTO_ON_ERROR(ssd1306_cmd(SSD1306_INIT[i]), fail_dev, TAG, "init[%zu]", i);
 
     /* Boot banner so a working panel is obvious before the first snapshot. */
     fb_clear();
     fb_text(0, 0, "ESPIR-MASTER");
     fb_text(0, 2, "BOOT");
-    ESP_RETURN_ON_ERROR(ssd1306_flush(), TAG, "flush");
+    ESP_GOTO_ON_ERROR(ssd1306_flush(), fail_dev, TAG, "flush");
 
-    BaseType_t ok = xTaskCreate(oled_task, "espir_oled", 3072, NULL, 3, &s_task);
-    ESP_RETURN_ON_FALSE(ok == pdPASS, ESP_ERR_NO_MEM, TAG, "task");
+    ESP_GOTO_ON_FALSE(xTaskCreate(oled_task, "espir_oled", 3072, NULL, 3, &s_task) == pdPASS,
+                      ESP_ERR_NO_MEM, fail_dev, TAG, "task");
 
     ESP_LOGI(TAG, "SSD1306 128x32 on sda=%d scl=%d addr=0x%02x",
              cfg->sda_gpio, cfg->scl_gpio, cfg->i2c_addr);
     return ESP_OK;
+
+fail_dev:
+    i2c_master_bus_rm_device(s_dev);
+    s_dev = NULL;
+fail_bus:
+    i2c_del_master_bus(s_bus);
+    s_bus = NULL;
+    return ret;
 }
 
 void espir_oled_update(const espir_info_t *info)
