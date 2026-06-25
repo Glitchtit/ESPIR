@@ -50,6 +50,7 @@ to fire eventually at their own nearby appliance.
 | `components/espir_zcl`   | Custom ZCL cluster `0xFC00` contract (`espir_proto.h`) |
 | `components/espir_device`| Zigbee device: endpoint, cluster server, learn FSM (shared) |
 | `components/espir_led`   | RGB status LED (LEDC PWM) for the custom-PCB slave |
+| `components/espir_oled`  | 0.91″ SSD1306 128×32 I²C status display for the master |
 | `master/`                | ESP-IDF app: VS1838B learn + SZHJW transmit (Router) |
 | `slave/`                 | ESP-IDF app: SZHJW transmit + program/send (Sleepy End Device) |
 | `slave-pcb/`             | Custom-PCB slave: discrete MOSFET IR driver + RGB status LED |
@@ -75,9 +76,15 @@ learns **any** remote protocol; NEC is auto-compacted.
 |--------|---------|-------------|
 | IR TX data | **GPIO6** | SZHJW `DAT` |
 | IR RX data | **GPIO4** | VS1838B `OUT` |
+| OLED I²C SDA | **GPIO22** | SSD1306 `SDA` |
+| OLED I²C SCL | **GPIO23** | SSD1306 `SCK` (= SCL) |
 | 5 V | `5V` pin | SZHJW `VCC` |
-| 3.3 V | `3V3` pin | VS1838B `VCC` — **3.3 V only** (output drives a GPIO) |
-| GND | any `GND` | SZHJW `GND` **and** VS1838B `GND` |
+| 3.3 V | `3V3` pin | VS1838B `VCC` (**3.3 V only**) **and** SSD1306 `VCC` |
+| GND | any `GND` | SZHJW `GND`, VS1838B `GND` **and** SSD1306 `GND` |
+
+An optional **0.91″ SSD1306 128×32 I²C OLED** (addr 0x3C) shows the active slot, whether it
+holds a code (`STORED`/`EMPTY`), and learn/connection state. Set `ESPIR_OLED_ENABLE=n` to omit
+it — the firmware runs normally without a panel.
 
 ```
 DevKitC-1                         SZHJW dual-LED TX (5 V) — SEND
@@ -140,6 +147,10 @@ cd slave-pcb && idf.py set-target esp32c6 && idf.py build flash monitor
 4. Bind an HA button to **send slot N**. To cover another room, replicate the code to a
    slave (see `homeassistant/replicate-codes.yaml`).
 
+The HA **Slot** selector drives the device over the `selectSlot` command (manufacturer-specific
+ZCL attributes aren't OTA-writable on zboss). The device reports the active slot and whether it
+holds a code back to HA (`slot_occupied`) and to the master OLED.
+
 ## Status
 
 Firmware and host integration are written and **both apps build clean** for esp32c6
@@ -147,11 +158,13 @@ Firmware and host integration are written and **both apps build clean** for esp3
 
 - ✅ Shared components (`espir_ir` RMT TX/RX, `espir_codec` NEC+raw, `espir_store` NVS slots)
 - ✅ Master app — Zigbee Router, custom cluster `0xFC00`, learn FSM
+- ✅ Master OLED (`espir_oled`) — active slot, `STORED`/`EMPTY`, learn/connection state
 - ✅ Slave app — Zigbee Sleepy End Device, transmit-only
 - ✅ Z2M converter, HA replication script, hardware docs
 
 **Verified on hardware:** the master pairs to Zigbee2MQTT, exposes the custom cluster,
-status fields populate live in HA, and learn/send work end-to-end over the RMT path. Wire the
+status fields populate live in HA, learn/send work end-to-end over the RMT path, and the OLED
+tracks the active slot + `STORED`/`EMPTY` occupancy live. Wire the
 master per [`hardware/wiring-master.md`](hardware/wiring-master.md) (SZHJW on GPIO6, VS1838B on
-GPIO4 at 3.3 V). **Remaining:** flash/pair the XIAO **slave** and exercise the replication
-path (`homeassistant/replicate-codes.yaml`).
+GPIO4 at 3.3 V, SSD1306 on GPIO22/23). **Remaining:** flash/pair the XIAO **slave** and exercise
+the replication path (`homeassistant/replicate-codes.yaml`).
