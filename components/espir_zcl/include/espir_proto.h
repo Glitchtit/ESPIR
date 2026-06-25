@@ -34,6 +34,7 @@
 #define ESPIR_ATTR_LAST_KIND        0x0005  /* enum8, ro          */
 #define ESPIR_ATTR_FW_ROLE          0x0006  /* enum8, ro          */
 #define ESPIR_ATTR_LAST_CARRIER     0x0007  /* u16, ro (kHz) — carrier of last learned code */
+#define ESPIR_ATTR_SELECTED_SLOT    0x0008  /* u8, rw — Z2M slot selector; drives the OLED */
 
 /* ---- Commands (client -> server) ----------------------------------------- */
 #define ESPIR_CMD_LEARN             0x00    /* {slot:u8}                                   */

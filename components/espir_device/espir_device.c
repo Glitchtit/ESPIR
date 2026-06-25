@@ -40,6 +40,7 @@ static uint8_t  s_slot_count;
 static uint8_t  s_active_learn = ESPIR_SLOT_IDLE;
 static uint8_t  s_learn_status = ESPIR_LEARN_IDLE;
 static uint8_t  s_last_slot;
+static uint8_t  s_selected_slot;          /* mirrors the Z2M "Slot" selector (attr 0x0008) */
 static uint8_t  s_last_kind = ESPIR_KIND_RAW;
 static uint8_t  s_fw_role;
 static uint16_t s_last_carrier = ESPIR_CARRIER_DEFAULT_KHZ;
@@ -356,6 +357,15 @@ static esp_err_t action_handler(esp_zb_core_action_callback_id_t id, const void 
 {
     if (id == ESP_ZB_CORE_CMD_CUSTOM_CLUSTER_REQ_CB_ID) {
         handle_custom_cmd((const esp_zb_zcl_custom_cluster_command_message_t *)message);
+    } else if (id == ESP_ZB_CORE_SET_ATTR_VALUE_CB_ID) {
+        const esp_zb_zcl_set_attr_value_message_t *m =
+            (const esp_zb_zcl_set_attr_value_message_t *)message;
+        if (m->info.cluster == ESPIR_CLUSTER_ID &&
+            m->attribute.id == ESPIR_ATTR_SELECTED_SLOT &&
+            m->attribute.data.value) {
+            s_selected_slot = *(uint8_t *)m->attribute.data.value;
+            ESP_LOGI(TAG, "selected slot -> %u", s_selected_slot);
+        }
     }
     return ESP_OK;
 }
@@ -448,6 +458,7 @@ static esp_zb_ep_list_t *build_endpoint(void)
     esp_zb_cluster_add_manufacturer_attr(cust, ESPIR_CLUSTER_ID, ESPIR_ATTR_LAST_KIND,    mc, ESP_ZB_ZCL_ATTR_TYPE_8BIT_ENUM,    ro_rep, &s_last_kind);
     esp_zb_cluster_add_manufacturer_attr(cust, ESPIR_CLUSTER_ID, ESPIR_ATTR_FW_ROLE,      mc, ESP_ZB_ZCL_ATTR_TYPE_8BIT_ENUM,    ro_rep, &s_fw_role);
     esp_zb_cluster_add_manufacturer_attr(cust, ESPIR_CLUSTER_ID, ESPIR_ATTR_LAST_CARRIER, mc, ESP_ZB_ZCL_ATTR_TYPE_U16,          ro_rep, &s_last_carrier);
+    esp_zb_cluster_add_manufacturer_attr(cust, ESPIR_CLUSTER_ID, ESPIR_ATTR_SELECTED_SLOT, mc, ESP_ZB_ZCL_ATTR_TYPE_U8, rw, &s_selected_slot);
 
     esp_zb_cluster_list_t *cl = esp_zb_zcl_cluster_list_create();
     esp_zb_cluster_list_add_basic_cluster(cl, basic, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE);
