@@ -7,6 +7,7 @@
 | 1 | ESP32-C6-DevKitC-1 (or clone, 4 MB+ flash) | USB-powered; provides 5 V rail |
 | 1 | **SZHJW** dual-LED IR transmitter (5 V, `DAT/VCC/GND`) | **transmitting** (RMT, software 38 kHz carrier) |
 | 1 | **VS1838B** / TSOP38238 38 kHz receiver | **learning** (RMT raw capture); power at 3.3 V |
+| 1 | 0.91" SSD1306 OLED, 128×32, I²C (`GND/VCC/SCK/SDA`) | status display: live selected slot + learn state; power at 3.3 V, I²C addr 0x3C |
 | — | jumper wires | — |
 
 Master = SZHJW (send) + VS1838B (learn), both on the C6 RMT peripheral. Raw capture learns

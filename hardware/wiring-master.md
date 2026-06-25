@@ -30,6 +30,30 @@ DevKitC-1                         SZHJW dual-LED TX (5 V) — SEND
   GND ──────────────┴─────────────► GND
 ```
 
+## OLED status display (optional)
+
+A 0.91″ **SSD1306** 128×32 I²C OLED shows the live selected slot and learn status. Its `SCK`
+silkscreen pin is the I²C **clock (SCL)** — this is an I²C module, not SPI. Default address 0x3C.
+
+| Signal | C6 GPIO | Connects to |
+|--------|---------|-------------|
+| I²C SDA | **GPIO22** | OLED `SDA` |
+| I²C SCL | **GPIO23** | OLED `SCK` (= SCL) |
+| 3.3 V | `3V3` pin | OLED `VCC` — **3.3 V** |
+| GND | any `GND` | OLED `GND` |
+
+```text
+DevKitC-1                         SSD1306 0.91" OLED (I2C, 3.3 V)
+  3V3   ──────────────────────────► VCC
+  GND   ──────────────────────────► GND
+  GPIO22 ─────────────────────────► SDA
+  GPIO23 ─────────────────────────► SCK (= SCL)
+```
+
+Pins are overridable in `menuconfig → ESPIR Configuration` (`ESPIR_OLED_SDA_GPIO`,
+`ESPIR_OLED_SCL_GPIO`, `ESPIR_OLED_I2C_ADDR`); set `ESPIR_OLED_ENABLE=n` to omit the panel.
+The display is optional — if absent, the firmware logs a warning and runs normally.
+
 ## Notes
 
 - **Power the VS1838B at 3.3 V**, never 5 V — its `OUT` goes straight to `GPIO4`.
