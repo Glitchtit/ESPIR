@@ -24,4 +24,23 @@ config ESPIR_SEND_HOLD_MS
         On send, the frame is retransmitted until this much time has elapsed (0 = single shot).
         Mimics holding the button so appliances that need several frames respond reliably.
 
+config ESPIR_OLED_ENABLE
+    bool "Enable 0.91\" SSD1306 status OLED (master)"
+    default y
+
+config ESPIR_OLED_SDA_GPIO
+    int "OLED I2C SDA GPIO"
+    depends on ESPIR_OLED_ENABLE
+    default 22
+
+config ESPIR_OLED_SCL_GPIO
+    int "OLED I2C SCL GPIO (module 'SCK' pin)"
+    depends on ESPIR_OLED_ENABLE
+    default 23
+
+config ESPIR_OLED_I2C_ADDR
+    hex "OLED I2C address"
+    depends on ESPIR_OLED_ENABLE
+    default 0x3C
+
 endmenu
