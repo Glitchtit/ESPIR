@@ -45,6 +45,7 @@ static uint8_t  s_active_learn = ESPIR_SLOT_IDLE;
 static uint8_t  s_learn_status = ESPIR_LEARN_IDLE;
 static uint8_t  s_last_slot;
 static uint8_t  s_selected_slot;          /* mirrors the Z2M "Slot" selector (attr 0x0008) */
+static uint8_t  s_slot_occupied;          /* 1 if s_selected_slot holds a code (attr 0x000A) */
 static uint8_t  s_last_kind = ESPIR_KIND_RAW;
 static uint8_t  s_fw_role;
 static uint16_t s_last_carrier = ESPIR_CARRIER_DEFAULT_KHZ;
@@ -71,6 +72,7 @@ static void notify_info(void)
         .selected_slot = s_selected_slot,
         .learn_status  = s_learn_status,
         .learn_slot    = s_active_learn,
+        .slot_occupied = s_slot_occupied,
     };
     s_info_cb(&info);
 }
@@ -108,6 +110,15 @@ static void report_attr(uint16_t attr_id)
     if (e != ESP_OK) ESP_LOGW(TAG, "report attr 0x%04x -> %s", attr_id, esp_err_to_name(e));
 }
 
+/* Recompute whether the selected slot holds a code and publish it (attr + report). Callers
+ * fire notify_info() to refresh the OLED. Call with the Zigbee lock held. */
+static void update_slot_occupied(void)
+{
+    s_slot_occupied = espir_store_occupied(s_selected_slot) ? 1 : 0;
+    set_attr(ESPIR_ATTR_SLOT_OCCUPIED, &s_slot_occupied);
+    report_attr(ESPIR_ATTR_SLOT_OCCUPIED);
+}
+
 /* Push every attribute to the coordinator so Z2M shows real values instead of "Null".
  * Called shortly after (re)joining; runs in the Zigbee task context. */
 static void report_all(void)
@@ -122,6 +133,9 @@ static void report_all(void)
     report_attr(ESPIR_ATTR_LAST_KIND);
     report_attr(ESPIR_ATTR_LAST_CARRIER);
     report_attr(ESPIR_ATTR_LAST_CODE);
+    set_attr(ESPIR_ATTR_SELECTED_SLOT, &s_selected_slot);
+    report_attr(ESPIR_ATTR_SELECTED_SLOT);
+    update_slot_occupied();   /* publish initial occupancy of the selected slot */
     if (s_cfg.battery && !s_batt_started) {
         s_batt_started = true;                       /* kick the periodic battery chain once joined */
         esp_zb_scheduler_alarm(battery_cb, 0, 1000);
@@ -322,15 +336,22 @@ static void handle_custom_cmd(const esp_zb_zcl_custom_cluster_command_message_t 
         if (n >= 1) do_send(p[0]);
         break;
     case ESPIR_CMD_CLEAR:
-        if (n >= 1) espir_store_clear(p[0]);
+        if (n >= 1) {
+            espir_store_clear(p[0]);
+            update_slot_occupied();   /* selected slot may have just been emptied */
+            notify_info();
+        }
         break;
     case ESPIR_CMD_PROGRAM:                       /* slot,kind,carrier(2),code(octstr) */
         if (n >= 5) {
             uint8_t slot = p[0], kind = p[1];
             uint16_t carrier = p[2] | (p[3] << 8);
             uint8_t clen = p[4];
-            if (5 + clen <= n)
+            if (5 + clen <= n) {
                 espir_store_program_single(slot, kind, carrier, &p[5], clen);
+                update_slot_occupied();
+                notify_info();
+            }
         }
         break;
     case ESPIR_CMD_PROGRAM_BEGIN:                  /* slot,kind,carrier(2),total(2) */
@@ -348,7 +369,11 @@ static void handle_custom_cmd(const esp_zb_zcl_custom_cluster_command_message_t 
         }
         break;
     case ESPIR_CMD_PROGRAM_COMMIT:
-        if (n >= 1) espir_store_program_commit(p[0]);
+        if (n >= 1) {
+            espir_store_program_commit(p[0]);
+            update_slot_occupied();
+            notify_info();
+        }
         break;
     case ESPIR_CMD_COPY_TO:                        /* slot, ieee(8 LE) */
         if (n >= 9) {
@@ -364,6 +389,17 @@ static void handle_custom_cmd(const esp_zb_zcl_custom_cluster_command_message_t 
             for (uint8_t s = 0; s < (uint8_t)espir_store_count(); s++) replicate_slot_to(dst, s);
         }
         break;
+    case ESPIR_CMD_SELECT_SLOT:                    /* slot:u8 — set active slot (drives OLED) */
+        if (n >= 1) {
+            s_selected_slot = p[0];
+            set_attr(ESPIR_ATTR_SELECTED_SLOT, &s_selected_slot);  /* report back so the host re-syncs */
+            report_attr(ESPIR_ATTR_SELECTED_SLOT);
+            update_slot_occupied();                /* publish whether this slot holds a code */
+            notify_info();
+            ESP_LOGI(TAG, "selected slot -> %u (%s)", s_selected_slot,
+                     s_slot_occupied ? "stored" : "empty");
+        }
+        break;
     default:
         ESP_LOGW(TAG, "unknown custom cmd 0x%02x", cmd);
         break;
@@ -374,16 +410,6 @@ static esp_err_t action_handler(esp_zb_core_action_callback_id_t id, const void 
 {
     if (id == ESP_ZB_CORE_CMD_CUSTOM_CLUSTER_REQ_CB_ID) {
         handle_custom_cmd((const esp_zb_zcl_custom_cluster_command_message_t *)message);
-    } else if (id == ESP_ZB_CORE_SET_ATTR_VALUE_CB_ID) {
-        const esp_zb_zcl_set_attr_value_message_t *m =
-            (const esp_zb_zcl_set_attr_value_message_t *)message;
-        if (m->info.cluster == ESPIR_CLUSTER_ID &&
-            m->attribute.id == ESPIR_ATTR_SELECTED_SLOT &&
-            m->attribute.data.value) {
-            s_selected_slot = *(uint8_t *)m->attribute.data.value;
-            ESP_LOGI(TAG, "selected slot -> %u", s_selected_slot);
-            notify_info();
-        }
     }
     return ESP_OK;
 }
@@ -437,6 +463,7 @@ static void learn_task(void *arg)
                 report_attr(ESPIR_ATTR_LAST_KIND);
                 report_attr(ESPIR_ATTR_LAST_CARRIER);
                 report_attr(ESPIR_ATTR_LAST_CODE);
+                update_slot_occupied();   /* the just-learned slot may be the selected one */
             }
             set_attr(ESPIR_ATTR_ACTIVE_LEARN, &s_active_learn);
             set_attr(ESPIR_ATTR_LEARN_STATUS, &s_learn_status);
@@ -477,7 +504,8 @@ static esp_zb_ep_list_t *build_endpoint(void)
     esp_zb_cluster_add_manufacturer_attr(cust, ESPIR_CLUSTER_ID, ESPIR_ATTR_LAST_KIND,    mc, ESP_ZB_ZCL_ATTR_TYPE_8BIT_ENUM,    ro_rep, &s_last_kind);
     esp_zb_cluster_add_manufacturer_attr(cust, ESPIR_CLUSTER_ID, ESPIR_ATTR_FW_ROLE,      mc, ESP_ZB_ZCL_ATTR_TYPE_8BIT_ENUM,    ro_rep, &s_fw_role);
     esp_zb_cluster_add_manufacturer_attr(cust, ESPIR_CLUSTER_ID, ESPIR_ATTR_LAST_CARRIER, mc, ESP_ZB_ZCL_ATTR_TYPE_U16,          ro_rep, &s_last_carrier);
-    esp_zb_cluster_add_manufacturer_attr(cust, ESPIR_CLUSTER_ID, ESPIR_ATTR_SELECTED_SLOT, mc, ESP_ZB_ZCL_ATTR_TYPE_U8, rw, &s_selected_slot);
+    esp_zb_cluster_add_manufacturer_attr(cust, ESPIR_CLUSTER_ID, ESPIR_ATTR_SELECTED_SLOT, mc, ESP_ZB_ZCL_ATTR_TYPE_U8, ro_rep, &s_selected_slot);
+    esp_zb_cluster_add_manufacturer_attr(cust, ESPIR_CLUSTER_ID, ESPIR_ATTR_SLOT_OCCUPIED, mc, ESP_ZB_ZCL_ATTR_TYPE_U8, ro_rep, &s_slot_occupied);
 
     esp_zb_cluster_list_t *cl = esp_zb_zcl_cluster_list_create();
     esp_zb_cluster_list_add_basic_cluster(cl, basic, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE);

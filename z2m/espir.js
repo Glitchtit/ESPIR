@@ -20,7 +20,6 @@ const e = exposes.presets;
 const ea = exposes.access;
 
 const CLUSTER = 'espir';
-const MANUF_CODE = 0x1037; // ESPIR_MANUF_CODE — must match firmware (espir_proto.h)
 
 // ---- Custom cluster 0xFC00 (mirror of espir_proto.h) -----------------------
 const ESPIR_CLUSTER_DEF = {
@@ -36,6 +35,7 @@ const ESPIR_CLUSTER_DEF = {
         learnStatus: {ID: 0x0002, type: Zcl.DataType.ENUM8, name: 'learnStatus'},
         lastSlot: {ID: 0x0003, type: Zcl.DataType.UINT8, name: 'lastSlot'},
         selectedSlot: {ID: 0x0008, type: Zcl.DataType.UINT8, name: 'selectedSlot'},
+        slotOccupied: {ID: 0x000a, type: Zcl.DataType.UINT8, name: 'slotOccupied'},
         lastCode: {ID: 0x0004, type: Zcl.DataType.OCTET_STR, name: 'lastCode'},
         lastKind: {ID: 0x0005, type: Zcl.DataType.ENUM8, name: 'lastKind'},
         fwRole: {ID: 0x0006, type: Zcl.DataType.ENUM8, name: 'fwRole'},
@@ -68,6 +68,7 @@ const ESPIR_CLUSTER_DEF = {
             {name: 'ieee', type: Zcl.DataType.IEEE_ADDR},
         ]},
         copyAll: {ID: 0x08, parameters: [{name: 'ieee', type: Zcl.DataType.IEEE_ADDR}]},
+        selectSlot: {ID: 0x09, parameters: [{name: 'slot', type: Zcl.DataType.UINT8}]},
     },
     commandsResponse: {},
 };
@@ -98,6 +99,7 @@ const convertEspir = (msg) => {
     if ((v = g('fwRole', 6)) !== undefined) out.fw_role = ROLE[v] ?? v;
     if ((v = g('lastCarrier', 7)) !== undefined) out.last_carrier = v;
     if ((v = g('selectedSlot', 8)) !== undefined) out.slot = v;
+    if ((v = g('slotOccupied', 10)) !== undefined) out.slot_occupied = v ? 'stored' : 'empty';
     return out;
 };
 
@@ -117,14 +119,16 @@ const ESPIR_EP = 10;
 const espirEndpoint = (meta) => meta.device.getEndpoint(ESPIR_EP);
 const ATTRS = ['slotCount', 'fwRole', 'learnStatus', 'lastSlot', 'lastKind', 'lastCarrier', 'lastCode'];
 
-// `slot` — the selector the action buttons act on. Also written to the device (attr 0x0008)
-// so the master's OLED shows the live selection.
+// `slot` — the selector the action buttons act on. Sent to the device via the selectSlot
+// command (0x09) so the master's OLED shows the live selection.
 const tzSlot = {
     key: ['slot'],
     convertSet: async (entity, key, value, meta) => {
         const slot = Number(value);
-        await espirEndpoint(meta).write(
-            CLUSTER, {selectedSlot: slot}, {manufacturerCode: MANUF_CODE});
+        // Use a command, not an attribute write: manufacturer-specific attributes are not
+        // OTA-writable on the device's zboss stack (it returns NOT_AUTHORIZED). The device
+        // reports `selectedSlot` back, which fromZigbee syncs into state.slot.
+        await espirEndpoint(meta).command(CLUSTER, 'selectSlot', {slot}, {});
         return {state: {slot}};
     },
 };
@@ -211,6 +215,8 @@ const slotExpose = e.numeric('slot', ea.STATE_SET).withValueMin(0).withValueMax(
     .withDescription('Slot the action buttons below operate on');
 
 const statusExposes = [
+    e.enum('slot_occupied', ea.STATE, ['empty', 'stored'])
+        .withDescription('Whether the currently selected slot has a code stored'),
     e.enum('learn_status', ea.STATE, Object.values(LEARN_STATUS))
         .withDescription('State of the last learn operation'),
     e.numeric('last_slot', ea.STATE).withDescription('Slot most recently learned'),

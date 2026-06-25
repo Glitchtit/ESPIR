@@ -50,6 +50,7 @@ typedef struct {
     uint8_t        selected_slot; /* Z2M slot selector (attr 0x0008)        */
     uint8_t        learn_status;  /* espir_learn_status_t                   */
     uint8_t        learn_slot;    /* slot being learned, 0xFF = idle        */
+    uint8_t        slot_occupied; /* 1 if the selected slot holds a code    */
 } espir_info_t;
 
 void espir_device_set_info_cb(void (*cb)(const espir_info_t *info));

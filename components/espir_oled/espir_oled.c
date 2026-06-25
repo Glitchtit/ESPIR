@@ -145,10 +145,12 @@ static const char *learn_text(const espir_info_t *in)
 
 static void render(const espir_info_t *in)
 {
-    char slot[9];   /* "SLOT NNN\0" — up to 3 digits (uint8_t max 255) + NUL */
-    /* During a learn, show the slot being captured; otherwise the selector. */
+    char slot[20];  /* "SLOT NNN  STORED\0" */
+    /* During a learn, show the slot being captured; otherwise the selector. The occupancy
+     * flag tracks the selected slot (== the learn target in the normal flow). */
     uint8_t show = (in->learn_slot != ESPIR_SLOT_IDLE) ? in->learn_slot : in->selected_slot;
-    snprintf(slot, sizeof(slot), "SLOT %u", (unsigned)show);
+    snprintf(slot, sizeof(slot), "SLOT %u  %s", (unsigned)show,
+             in->slot_occupied ? "STORED" : "EMPTY");
 
     fb_clear();
     fb_text(0, 0, "ESPIR-MASTER");

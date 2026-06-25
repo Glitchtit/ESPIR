@@ -34,7 +34,10 @@
 #define ESPIR_ATTR_LAST_KIND        0x0005  /* enum8, ro          */
 #define ESPIR_ATTR_FW_ROLE          0x0006  /* enum8, ro          */
 #define ESPIR_ATTR_LAST_CARRIER     0x0007  /* u16, ro (kHz) — carrier of last learned code */
-#define ESPIR_ATTR_SELECTED_SLOT    0x0008  /* u8, rw — Z2M slot selector; drives the OLED */
+#define ESPIR_ATTR_SELECTED_SLOT    0x0008  /* u8, ro reportable — Z2M slot selector; drives the OLED.
+                                               Set via ESPIR_CMD_SELECT_SLOT (manuf-spec attrs aren't
+                                               OTA-writable on zboss), reported back so the host re-syncs. */
+#define ESPIR_ATTR_SLOT_OCCUPIED    0x000A  /* bool8, ro reportable — 1 if the selected slot holds a code */
 
 /* ---- Commands (client -> server) ----------------------------------------- */
 #define ESPIR_CMD_LEARN             0x00    /* {slot:u8}                                   */
@@ -46,6 +49,7 @@
 #define ESPIR_CMD_PROGRAM_COMMIT    0x06    /* {slot:u8}                                   */
 #define ESPIR_CMD_COPY_TO           0x07    /* {slot:u8, ieee:u64} master->slave copy one slot   */
 #define ESPIR_CMD_COPY_ALL          0x08    /* {ieee:u64} master->slave copy every non-empty slot */
+#define ESPIR_CMD_SELECT_SLOT       0x09    /* {slot:u8} set the active slot (drives OLED + reported back) */
 
 /* ---- Enums --------------------------------------------------------------- */
 typedef enum {

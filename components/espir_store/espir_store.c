@@ -94,6 +94,20 @@ esp_err_t espir_store_load(uint8_t slot, espir_code_t *c)
                ? ESP_OK : ESP_ERR_INVALID_RESPONSE;
 }
 
+bool espir_store_occupied(uint8_t slot)
+{
+    if (slot >= CONFIG_ESPIR_SLOT_COUNT) return false;
+    nvs_handle_t h;
+    if (nvs_open(NVS_NS, NVS_READONLY, &h) != ESP_OK) return false;  /* namespace absent = empty */
+    char key[16];
+    slot_key(slot, key);
+    size_t len = 0;
+    /* NULL out-buffer: nvs returns the blob size (or NOT_FOUND) without reading the payload. */
+    esp_err_t err = nvs_get_blob(h, key, NULL, &len);
+    nvs_close(h);
+    return err == ESP_OK && len >= REC_HDR;
+}
+
 esp_err_t espir_store_clear(uint8_t slot)
 {
     if (slot >= CONFIG_ESPIR_SLOT_COUNT) return ESP_ERR_INVALID_ARG;

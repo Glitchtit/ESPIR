@@ -18,6 +18,7 @@ esp_err_t espir_store_save(uint8_t slot, const espir_code_t *c);
 esp_err_t espir_store_load(uint8_t slot, espir_code_t *c);
 esp_err_t espir_store_clear(uint8_t slot);
 int       espir_store_count(void);          /* number of slots (Kconfig) */
+bool      espir_store_occupied(uint8_t slot); /* true if the slot holds a code (cheap existence check) */
 
 esp_err_t espir_store_program_single(uint8_t slot, espir_kind_t kind, uint16_t carrier_khz,
                                      const uint8_t *blob, int len);
