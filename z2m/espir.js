@@ -20,6 +20,7 @@ const e = exposes.presets;
 const ea = exposes.access;
 
 const CLUSTER = 'espir';
+const MANUF_CODE = 0x1037; // ESPIR_MANUF_CODE — must match firmware (espir_proto.h)
 
 // ---- Custom cluster 0xFC00 (mirror of espir_proto.h) -----------------------
 const ESPIR_CLUSTER_DEF = {
@@ -34,6 +35,7 @@ const ESPIR_CLUSTER_DEF = {
         activeLearnSlot: {ID: 0x0001, type: Zcl.DataType.UINT8, name: 'activeLearnSlot'},
         learnStatus: {ID: 0x0002, type: Zcl.DataType.ENUM8, name: 'learnStatus'},
         lastSlot: {ID: 0x0003, type: Zcl.DataType.UINT8, name: 'lastSlot'},
+        selectedSlot: {ID: 0x0008, type: Zcl.DataType.UINT8, name: 'selectedSlot'},
         lastCode: {ID: 0x0004, type: Zcl.DataType.OCTET_STR, name: 'lastCode'},
         lastKind: {ID: 0x0005, type: Zcl.DataType.ENUM8, name: 'lastKind'},
         fwRole: {ID: 0x0006, type: Zcl.DataType.ENUM8, name: 'fwRole'},
@@ -95,6 +97,7 @@ const convertEspir = (msg) => {
     if ((v = g('lastKind', 5)) !== undefined) out.last_kind = KIND[v] ?? v;
     if ((v = g('fwRole', 6)) !== undefined) out.fw_role = ROLE[v] ?? v;
     if ((v = g('lastCarrier', 7)) !== undefined) out.last_carrier = v;
+    if ((v = g('selectedSlot', 8)) !== undefined) out.slot = v;
     return out;
 };
 
@@ -114,10 +117,16 @@ const ESPIR_EP = 10;
 const espirEndpoint = (meta) => meta.device.getEndpoint(ESPIR_EP);
 const ATTRS = ['slotCount', 'fwRole', 'learnStatus', 'lastSlot', 'lastKind', 'lastCarrier', 'lastCode'];
 
-// `slot` — the selector the action buttons act on. Stored in state, no device traffic.
+// `slot` — the selector the action buttons act on. Also written to the device (attr 0x0008)
+// so the master's OLED shows the live selection.
 const tzSlot = {
     key: ['slot'],
-    convertSet: async (entity, key, value, meta) => ({state: {slot: Number(value)}}),
+    convertSet: async (entity, key, value, meta) => {
+        const slot = Number(value);
+        await espirEndpoint(meta).write(
+            CLUSTER, {selectedSlot: slot}, {manufacturerCode: MANUF_CODE});
+        return {state: {slot}};
+    },
 };
 
 // `action` — the Learn / Send / Clear buttons. Operates on the currently selected `slot`.
