@@ -43,4 +43,15 @@ typedef enum {
  * Default: no callback, so master/breadboard-slave builds are unaffected. */
 void espir_device_set_status_cb(void (*cb)(espir_status_t status));
 
+/* Richer state snapshot for a status display (the master OLED). Delivered on every change to
+ * any field. Independent of the status_cb above; default is no callback. */
+typedef struct {
+    espir_status_t status;        /* boot / searching / connected / sending */
+    uint8_t        selected_slot; /* Z2M slot selector (attr 0x0008)        */
+    uint8_t        learn_status;  /* espir_learn_status_t                   */
+    uint8_t        learn_slot;    /* slot being learned, 0xFF = idle        */
+} espir_info_t;
+
+void espir_device_set_info_cb(void (*cb)(const espir_info_t *info));
+
 #endif /* ESPIR_DEVICE_H */

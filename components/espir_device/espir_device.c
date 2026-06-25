@@ -33,7 +33,11 @@ static volatile bool s_joined;   /* sleepy ED: only sleep once joined (commissio
 
 /* Optional status indicator (e.g. RGB LED). NULL on master/breadboard-slave builds. */
 static void (*s_status_cb)(espir_status_t);
-static void notify_status(espir_status_t s) { if (s_status_cb) s_status_cb(s); }
+static void (*s_info_cb)(const espir_info_t *);
+static espir_status_t s_status = ESPIR_STATUS_BOOT;   /* tracked so info snapshots carry it */
+static void notify_info(void);   /* defined after the attribute globals it snapshots */
+
+static void notify_status(espir_status_t s) { s_status = s; if (s_status_cb) s_status_cb(s); notify_info(); }
 
 /* Custom-cluster attribute backing storage. */
 static uint8_t  s_slot_count;
@@ -58,6 +62,18 @@ static void battery_adc_init(int gpio);
 
 static uint8_t s_mfg_buf[32];
 static uint8_t s_model_buf[32];
+
+static void notify_info(void)
+{
+    if (!s_info_cb) return;
+    espir_info_t info = {
+        .status        = s_status,
+        .selected_slot = s_selected_slot,
+        .learn_status  = s_learn_status,
+        .learn_slot    = s_active_learn,
+    };
+    s_info_cb(&info);
+}
 
 static void *zcl_str(uint8_t *buf, const char *s)
 {
@@ -233,6 +249,7 @@ static void start_learn(uint8_t slot)
     set_attr(ESPIR_ATTR_ACTIVE_LEARN, &s_active_learn);
     set_attr(ESPIR_ATTR_LEARN_STATUS, &s_learn_status);
     report_attr(ESPIR_ATTR_LEARN_STATUS);
+    notify_info();
     xSemaphoreGive(s_learn_sem);
     ESP_LOGI(TAG, "learn mode for slot %u", slot);
 }
@@ -365,6 +382,7 @@ static esp_err_t action_handler(esp_zb_core_action_callback_id_t id, const void 
             m->attribute.data.value) {
             s_selected_slot = *(uint8_t *)m->attribute.data.value;
             ESP_LOGI(TAG, "selected slot -> %u", s_selected_slot);
+            notify_info();
         }
     }
     return ESP_OK;
@@ -423,6 +441,7 @@ static void learn_task(void *arg)
             set_attr(ESPIR_ATTR_ACTIVE_LEARN, &s_active_learn);
             set_attr(ESPIR_ATTR_LEARN_STATUS, &s_learn_status);
             report_attr(ESPIR_ATTR_LEARN_STATUS);
+            notify_info();
             esp_zb_lock_release();
         }
     }
@@ -598,6 +617,11 @@ static void esp_zb_task(void *arg)
 void espir_device_set_status_cb(void (*cb)(espir_status_t status))
 {
     s_status_cb = cb;
+}
+
+void espir_device_set_info_cb(void (*cb)(const espir_info_t *info))
+{
+    s_info_cb = cb;
 }
 
 void espir_device_start(const espir_device_cfg_t *cfg)
