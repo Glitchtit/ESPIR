@@ -53,10 +53,10 @@ to fire eventually at their own nearby appliance.
 | `components/espir_oled`  | 0.91″ SSD1306 128×32 I²C status display for the master |
 | `master/`                | ESP-IDF app: VS1838B learn + SZHJW transmit (Router) |
 | `slave/`                 | ESP-IDF app: SZHJW transmit + program/send (Sleepy End Device) |
-| `slave-pcb/`             | Custom-PCB slave: discrete MOSFET IR driver + RGB status LED |
+| `slave-pcb/`             | Custom-PCB slave firmware: discrete MOSFET IR driver + RGB status LED (XIAO-carrier pinout) |
 | `z2m/espir.js`           | Zigbee2MQTT external converter (mirrors the cluster contract) |
 | `homeassistant/`         | Replication script + example button entities |
-| `hardware/`              | BOM and wiring diagrams |
+| `hardware/`              | BOM + wiring; incl. [`pcb-fully-custom.md`](hardware/pcb-fully-custom.md) — the fully-custom discrete-ESP32-C6 slave board |
 | `docs/specs/`            | Design spec |
 
 ## Wiring & pinout
@@ -119,6 +119,20 @@ XIAO ESP32-C6                     SZHJW IR TX (2× 940nm emitters)
   GND ───────────────────────────► GND
   BAT+ / BAT− ◄──────────────────── 3.7 V LiPo cell
 ```
+
+### Custom slave PCBs (permanent builds)
+
+Two ways to turn the jumper-wire slave into a board:
+
+1. **XIAO-carrier** — reflow a XIAO ESP32-C6 onto a small PCB + a discrete IR driver + RGB status
+   LED. See [`hardware/wiring-slave.md` → Custom PCB](hardware/wiring-slave.md#custom-pcb-xiao-esp32-c6-as-an-smd-part).
+2. **Fully custom (bare ESP32-C6)** — a complete standalone board: discrete C6 (QFN-40) with its own
+   USB-C, MCP73831 LiPo charger, AP2112K LDO + load-share, chip antenna (+ u.FL), SPI flash and
+   40 MHz crystal, the 2-LED IR driver, and an addressable RGB status LED. Verified to meet the
+   slave requirements (Zigbee, battery+charging, USB-C flash/power). See
+   [`hardware/pcb-fully-custom.md`](hardware/pcb-fully-custom.md). *(Hardware designed in EasyEDA
+   Pro; it moves the IR pin to GPIO2 and the status LED to a single GPIO11 data line, so it needs a
+   firmware variant — noted in that doc.)*
 
 ## Build & flash
 

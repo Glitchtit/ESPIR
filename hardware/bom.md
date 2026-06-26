@@ -30,6 +30,12 @@ The slave transmits with the SZHJW emitter driven by the C6's RMT peripheral (so
 Replaces the SZHJW module with a discrete driver so the LEDs run **straight off GPIO18** (no
 module). See `hardware/wiring-slave.md` → *Custom PCB* for the schematic and sizing.
 
+> **Two custom-PCB options.** The build below reflows a **XIAO module** onto a carrier (quickest
+> path to a permanent slave). For a **fully integrated, fully custom board around a bare
+> ESP32-C6** — its own USB-C, LiPo charger, antenna, 3.3 V LDO, flash and crystal, with the 2-LED
+> IR driver and an addressable RGB status LED — see [`pcb-fully-custom.md`](pcb-fully-custom.md)
+> (the discrete-C6 board designed in EasyEDA Pro; includes its own verified BOM).
+
 LCSC/JLCPCB part numbers are listed where confirmed; passives marked **Basic** are standard JLC
 Basic values — let the JLCPCB BOM tool match the C-number (no part fee). Live stock changes daily,
 so confirm quantities at checkout.
