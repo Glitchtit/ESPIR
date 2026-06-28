@@ -18,6 +18,7 @@ static const char *TAG = "espir-ota";
 static const esp_partition_t *s_part;
 static esp_ota_handle_t        s_handle;
 static bool                    s_in_progress;
+static bool                    s_first_block;
 
 esp_zb_attribute_list_t *espir_ota_cluster_create(void)
 {
@@ -56,13 +57,22 @@ esp_err_t espir_ota_handle_value(const void *message)
         if (!s_part) { ESP_LOGE(TAG, "no free OTA partition"); return ESP_FAIL; }
         ret = esp_ota_begin(s_part, OTA_WITH_SEQUENTIAL_WRITES, &s_handle);
         s_in_progress = (ret == ESP_OK);
+        s_first_block = true;
         ESP_LOGI(TAG, "OTA start -> %s (%s)", s_part->label, esp_err_to_name(ret));
         break;
 
-    case ESP_ZB_ZCL_OTA_UPGRADE_STATUS_RECEIVE:
-        if (s_in_progress && m->payload_size && m->payload)
-            ret = esp_ota_write(s_handle, m->payload, m->payload_size);
+    case ESP_ZB_ZCL_OTA_UPGRADE_STATUS_RECEIVE: {
+        if (!s_in_progress || !m->payload_size || !m->payload) break;
+        const uint8_t *data = m->payload;
+        uint16_t len = m->payload_size;
+        if (s_first_block) {            /* skip sub-element tag(2)+length(4) */
+            if (len < 6) { ret = ESP_FAIL; break; }
+            data += 6; len -= 6;
+            s_first_block = false;
+        }
+        ret = esp_ota_write(s_handle, data, len);
         break;
+    }
 
     case ESP_ZB_ZCL_OTA_UPGRADE_STATUS_FINISH:
         if (s_in_progress) {

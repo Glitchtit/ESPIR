@@ -411,7 +411,7 @@ static esp_err_t action_handler(esp_zb_core_action_callback_id_t id, const void 
 {
     if (id == ESP_ZB_CORE_CMD_CUSTOM_CLUSTER_REQ_CB_ID) {
         handle_custom_cmd((const esp_zb_zcl_custom_cluster_command_message_t *)message);
-    } else if (id == ESP_ZB_CORE_OTA_UPGRADE_VALUE_CB_ID) {
+    } else if (s_cfg.ota && id == ESP_ZB_CORE_OTA_UPGRADE_VALUE_CB_ID) {
         return espir_ota_handle_value(message);
     }
     return ESP_OK;
