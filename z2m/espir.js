@@ -231,7 +231,7 @@ const masterDefinition = {
     model: 'ESPIR-MASTER',
     vendor: 'ESPIR',
     description: 'ESP32-C6 Zigbee IR blaster — master (learn + store + transmit)',
-    extend: [espirCluster],
+    extend: [espirCluster, m.ota()],
     fromZigbee: [fzEspir, fzEspirRaw],
     toZigbee: [tzSlot, tzAction, tzLearn, tzSend, tzClear, tzProgram, tzReplicate],
     configure: espirConfigure,
