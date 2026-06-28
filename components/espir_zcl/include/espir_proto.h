@@ -25,6 +25,15 @@
  * Z2M converter declares the same `manufacturerCode`. Any value works as long as both match. */
 #define ESPIR_MANUF_CODE            0x1037
 
+/* Firmware version, packed 0xMMmmppbb (major.minor.patch.build). This is the single
+ * source of truth: it is the OTA file_version the device advertises, what Z2M compares
+ * to decide "update available", and what tools/make_ota.py stamps into the .ota header.
+ * Bump this for every release. 0x00010000 = v0.1.0 build 0. */
+#define ESPIR_FW_VERSION            0x00010000u
+
+/* OTA image type — distinguishes products sharing the manufacturer code. Master = 0x0001. */
+#define ESPIR_OTA_IMAGE_TYPE        0x0001u
+
 /* ---- Attributes (server side) -------------------------------------------- */
 #define ESPIR_ATTR_SLOT_COUNT       0x0000  /* u8,  ro            */
 #define ESPIR_ATTR_ACTIVE_LEARN     0x0001  /* u8,  rw (0xFF idle)*/
