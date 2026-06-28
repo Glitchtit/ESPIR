@@ -19,3 +19,8 @@ dependencies.lock
 # Python venvs occasionally created by tooling
 .venv/
 __pycache__/
+
+# Local-only: kept on disk but intentionally untracked (purged from history)
+AGENTS.md
+homeassistant/
+docs/
