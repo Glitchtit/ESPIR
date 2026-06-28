@@ -17,6 +17,7 @@
 #include "espir_code.h"
 #include "espir_ir.h"
 #include "espir_store.h"
+#include "espir_ota.h"
 
 static const char *TAG = "espir_dev";
 
@@ -410,6 +411,8 @@ static esp_err_t action_handler(esp_zb_core_action_callback_id_t id, const void 
 {
     if (id == ESP_ZB_CORE_CMD_CUSTOM_CLUSTER_REQ_CB_ID) {
         handle_custom_cmd((const esp_zb_zcl_custom_cluster_command_message_t *)message);
+    } else if (id == ESP_ZB_CORE_OTA_UPGRADE_VALUE_CB_ID) {
+        return espir_ota_handle_value(message);
     }
     return ESP_OK;
 }
@@ -520,6 +523,11 @@ static esp_zb_ep_list_t *build_endpoint(void)
         esp_zb_cluster_list_add_power_config_cluster(cl, power, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE);
     }
 
+    if (s_cfg.ota) {   /* OTA Upgrade client — master only (slave keeps factory layout) */
+        esp_zb_attribute_list_t *ota = espir_ota_cluster_create();
+        esp_zb_cluster_list_add_ota_cluster(cl, ota, ESP_ZB_ZCL_CLUSTER_CLIENT_ROLE);
+    }
+
     esp_zb_ep_list_t *ep = esp_zb_ep_list_create();
     esp_zb_endpoint_config_t epc = {
         .endpoint = ESPIR_ENDPOINT,
@@ -566,6 +574,7 @@ void esp_zb_app_signal_handler(esp_zb_app_signal_t *signal_struct)
                 s_joined = true;
                 notify_status(ESPIR_STATUS_CONNECTED);
                 esp_zb_scheduler_alarm(report_all_cb, 0, 2000);
+                if (s_cfg.ota) { espir_ota_mark_valid(); espir_ota_start(ESPIR_ENDPOINT); }
             }
         } else {
             ESP_LOGW(TAG, "stack start failed: %s", esp_err_to_name(st));
@@ -578,6 +587,7 @@ void esp_zb_app_signal_handler(esp_zb_app_signal_t *signal_struct)
             s_joined = true;
             notify_status(ESPIR_STATUS_CONNECTED);
             esp_zb_scheduler_alarm(report_all_cb, 0, 2000);
+            if (s_cfg.ota) { espir_ota_mark_valid(); espir_ota_start(ESPIR_ENDPOINT); }
         } else {
             ESP_LOGW(TAG, "steering failed (%s), retrying", esp_err_to_name(st));
             notify_status(ESPIR_STATUS_SEARCHING);

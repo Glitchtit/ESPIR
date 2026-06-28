@@ -45,6 +45,7 @@ void app_main(void)
         .model = "ESPIR-MASTER",
         .learn_timeout_ms = CONFIG_ESPIR_LEARN_TIMEOUT_MS,
         .send_hold_ms = CONFIG_ESPIR_SEND_HOLD_MS,
+        .ota = true,
     };
     espir_device_start(&cfg);
 }

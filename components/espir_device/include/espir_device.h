@@ -19,6 +19,7 @@ typedef struct {
     const char  *model;           /* Basic-cluster model string, e.g. "ESPIR-MASTER" */
     uint32_t     learn_timeout_ms;/* master only: how long learn mode waits for a key */
     uint32_t     send_hold_ms;    /* repeat each send for this long (mimics holding a remote key); 0 = single shot */
+    bool         ota;             /* master only: register the Zigbee OTA Upgrade client cluster */
     bool         battery;         /* expose the Power Config cluster + report LiPo level (slave) */
     int          battery_adc_gpio;/* ADC1 GPIO reading the BAT+ divider (XIAO A0 = GPIO0) */
     int          battery_div_x100;/* divider ratio ×100 = (R_top+R_bottom)*100/R_bottom; 200 = ÷2 */
