@@ -1,0 +1,11 @@
+[
+  {
+    "fileVersion": 65536,
+    "fileSize": 682526,
+    "manufacturerCode": 4151,
+    "imageType": 1,
+    "sha512": "a0cbbf7e45c383218b6f9c5cb75aed37b97cee2b688d2b35940dbd81bff3b77536106882937dda4bfa6e71ebd55794a2af44771a9968ab31fb94a9f0e1144e78",
+    "url": "https://raw.githubusercontent.com/Glitchtit/ESPIR/feat/master-custom-pcb/z2m/ota/espir-master.ota",
+    "modelId": "ESPIR-MASTER"
+  }
+]
