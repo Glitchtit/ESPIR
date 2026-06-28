@@ -28,8 +28,8 @@
 /* Firmware version, packed 0xMMmmppbb (major.minor.patch.build). This is the single
  * source of truth: it is the OTA file_version the device advertises, what Z2M compares
  * to decide "update available", and what tools/make_ota.py stamps into the .ota header.
- * Bump this for every release. 0x00010000 = v0.1.0 build 0. */
-#define ESPIR_FW_VERSION            0x00010000u
+ * Bump this for every release. 0x00010000 = v0.1.0 build 0; 0x00010001 = v0.1.1. */
+#define ESPIR_FW_VERSION            0x00010001u
 
 /* OTA image type — distinguishes products sharing the manufacturer code. Master = 0x0001. */
 #define ESPIR_OTA_IMAGE_TYPE        0x0001u
