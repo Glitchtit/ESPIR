@@ -1,11 +1,29 @@
 [
   {
     "fileVersion": 65537,
-    "fileSize": 682590,
+    "fileSize": 682622,
     "manufacturerCode": 4151,
     "imageType": 1,
-    "sha512": "7d9d9409360773255264f259cb1318efb85e2e079bdd5a953cceeebced00066ea2aecb2c1a3262c69126dbe97a5931562dd6141c2bc41bb9d6158260cd0d9c48",
-    "url": "https://raw.githubusercontent.com/Glitchtit/ESPIR/feat/master-custom-pcb/z2m/ota/espir-master.ota",
+    "sha512": "2e369346673a33fcf55fc14317d12e810b9b2b80a1b31aa9843bcaa2f347d30ac0f4304334d1eaaedf2185f98f1c72d99b9603f2c4b7c54d0536e4ca0e424534",
+    "url": "https://raw.githubusercontent.com/Glitchtit/ESPIR/main/z2m/ota/espir-master.ota",
     "modelId": "ESPIR-MASTER"
+  },
+  {
+    "fileVersion": 65537,
+    "fileSize": 548830,
+    "manufacturerCode": 4151,
+    "imageType": 2,
+    "sha512": "d361ae3529c780b121bd27ee4d75b56c65f1e9ff4d37a9403a78c6191f91d850a06998e13f063106470a006c9e2322871817bf643e7137fc0da1fc515fbb1aee",
+    "url": "https://raw.githubusercontent.com/Glitchtit/ESPIR/main/z2m/ota/espir-slave.ota",
+    "modelId": "ESPIR-SLAVE"
+  },
+  {
+    "fileVersion": 65537,
+    "fileSize": 560846,
+    "manufacturerCode": 4151,
+    "imageType": 3,
+    "sha512": "94c477eb8d57aadcea907104d1261974054e1f17b0002c132e1e5d79c7fabb863648decdb72e6450263e025384112a735341e2bb744c4fc4025807d0b5bb1612",
+    "url": "https://raw.githubusercontent.com/Glitchtit/ESPIR/main/z2m/ota/espir-slave-pcb.ota",
+    "modelId": "ESPIR-SLAVE"
   }
 ]
