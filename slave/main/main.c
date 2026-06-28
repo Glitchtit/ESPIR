@@ -46,6 +46,8 @@ void app_main(void)
         .model = "ESPIR-SLAVE",
         .learn_timeout_ms = 0,
         .send_hold_ms = CONFIG_ESPIR_SEND_HOLD_MS,
+        .ota = true,
+        .ota_image_type = ESPIR_OTA_IMAGE_TYPE_SLAVE,
         .battery = true,
         .battery_adc_gpio = CONFIG_ESPIR_BATTERY_ADC_GPIO,
         .battery_div_x100 = CONFIG_ESPIR_BATTERY_DIV_X100,

@@ -255,6 +255,10 @@ const slaveDefinition = {
     vendor: 'ESPIR',
     description: 'ESP32-C6 Zigbee IR blaster — slave (transmit-only repeater)',
     extend: [espirCluster],
+    ota: true,   // OTA support (see masterDefinition note). Covers both the breadboard
+                 // slave and the custom-PCB slave — they share this ESPIR-SLAVE model but
+                 // advertise distinct OTA image types (0x0002 / 0x0003), so Z2M serves each
+                 // the matching .ota from the index.
     fromZigbee: [fzEspir, fzEspirRaw, fz.battery],
     toZigbee: [tzSlot, tzAction, tzSend, tzClear, tzProgram],
     configure: espirConfigure,

@@ -45,6 +45,28 @@ def test_index_entry(tmp_path="/tmp/claude-make-ota-test.ota"):
     assert len(entry["sha512"]) == 128  # hex of 64 bytes
     os.remove(tmp_path)
 
+def test_upsert_index(tmp_path="/tmp/claude-make-ota-index.json"):
+    if os.path.exists(tmp_path):
+        os.remove(tmp_path)
+    def entry(image_type, ver):
+        return {"fileVersion": ver, "fileSize": 1, "manufacturerCode": 0x1037,
+                "imageType": image_type, "sha512": "x", "url": "u",
+                "modelId": "M" if image_type == 1 else "S"}
+    # fresh index -> 1 entry
+    idx = mo.upsert_index(tmp_path, entry(1, 65536))
+    assert len(idx) == 1
+    json.dump(idx, open(tmp_path, "w"))
+    # different imageType -> added (2 entries), sorted by imageType
+    idx = mo.upsert_index(tmp_path, entry(2, 65536))
+    assert [e["imageType"] for e in idx] == [1, 2]
+    json.dump(idx, open(tmp_path, "w"))
+    # same imageType, newer version -> replaced in place, still 2 entries
+    idx = mo.upsert_index(tmp_path, entry(1, 65537))
+    assert len(idx) == 2
+    master = [e for e in idx if e["imageType"] == 1][0]
+    assert master["fileVersion"] == 65537
+    os.remove(tmp_path)
+
 if __name__ == "__main__":
     failures = 0
     for name, fn in sorted(globals().items()):

@@ -46,6 +46,7 @@ void app_main(void)
         .learn_timeout_ms = CONFIG_ESPIR_LEARN_TIMEOUT_MS,
         .send_hold_ms = CONFIG_ESPIR_SEND_HOLD_MS,
         .ota = true,
+        .ota_image_type = ESPIR_OTA_IMAGE_TYPE_MASTER,
     };
     espir_device_start(&cfg);
 }

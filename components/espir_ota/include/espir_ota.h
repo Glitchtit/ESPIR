@@ -1,9 +1,9 @@
 /*
- * espir_ota.h — Zigbee OTA Upgrade *client* for the ESPIR master.
+ * espir_ota.h — Zigbee OTA Upgrade *client* for ESPIR devices (master + both slaves).
  *
  * Registers the OTA cluster on the device endpoint, streams received image blocks into
  * the inactive app partition, and confirms the new image (cancelling bootloader rollback)
- * once the device is healthy. Master-only; the slave apps do not enable it.
+ * once the device is healthy. Enabled per-app via espir_device_cfg_t.ota.
  */
 #ifndef ESPIR_OTA_H
 #define ESPIR_OTA_H
@@ -12,10 +12,11 @@
 #include "esp_err.h"
 #include "esp_zigbee_core.h"
 
-/* Build the OTA Upgrade client cluster, populated from ESPIR_FW_VERSION /
- * ESPIR_OTA_IMAGE_TYPE / ESPIR_MANUF_CODE. Caller adds it to the endpoint cluster list
- * with ESP_ZB_ZCL_CLUSTER_CLIENT_ROLE. */
-esp_zb_attribute_list_t *espir_ota_cluster_create(void);
+/* Build the OTA Upgrade client cluster, populated from ESPIR_FW_VERSION / ESPIR_MANUF_CODE
+ * and the given image_type (ESPIR_OTA_IMAGE_TYPE_* — each binary advertises its own so Z2M
+ * serves the matching .ota). Caller adds it to the endpoint cluster list with
+ * ESP_ZB_ZCL_CLUSTER_CLIENT_ROLE. */
+esp_zb_attribute_list_t *espir_ota_cluster_create(uint16_t image_type);
 
 /* Activate periodic image queries on the given endpoint. Call once joined. */
 void espir_ota_start(uint8_t endpoint);

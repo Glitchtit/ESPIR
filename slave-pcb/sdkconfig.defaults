@@ -3,10 +3,13 @@ CONFIG_ZB_ENABLED=y
 CONFIG_ZB_ZED=y
 CONFIG_ZB_RADIO_NATIVE=y
 
-# --- Partition table with Zigbee storage ---
+# --- Partition table with Zigbee storage (dual-slot OTA) ---
 CONFIG_PARTITION_TABLE_CUSTOM=y
 CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
 CONFIG_PARTITION_TABLE_OFFSET=0x8000
+
+# --- OTA: dual-slot app rollback (new image must self-confirm or bootloader reverts) ---
+CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y
 
 # --- Flash ---
 CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y

@@ -31,8 +31,13 @@
  * Bump this for every release. 0x00010000 = v0.1.0 build 0; 0x00010001 = v0.1.1. */
 #define ESPIR_FW_VERSION            0x00010001u
 
-/* OTA image type — distinguishes products sharing the manufacturer code. Master = 0x0001. */
-#define ESPIR_OTA_IMAGE_TYPE        0x0001u
+/* OTA image type — distinguishes the product binaries sharing the manufacturer code. Each
+ * binary advertises its own type so Z2M serves it the matching .ota. NOTE: slave and
+ * slave-pcb share zigbeeModel "ESPIR-SLAVE" but are DIFFERENT images, so they need
+ * distinct image types. Each app passes its type via espir_device_cfg_t.ota_image_type. */
+#define ESPIR_OTA_IMAGE_TYPE_MASTER     0x0001u
+#define ESPIR_OTA_IMAGE_TYPE_SLAVE      0x0002u
+#define ESPIR_OTA_IMAGE_TYPE_SLAVE_PCB  0x0003u
 
 /* ---- Attributes (server side) -------------------------------------------- */
 #define ESPIR_ATTR_SLOT_COUNT       0x0000  /* u8,  ro            */

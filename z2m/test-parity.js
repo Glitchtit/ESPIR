@@ -30,5 +30,9 @@ const masterBlock = js.slice(js.indexOf('const masterDefinition'),
 assert.ok(/ota:\s*true/.test(masterBlock),
           'masterDefinition must include `ota: true` for Z2M OTA support');
 
+const slaveBlock = js.slice(js.indexOf('const slaveDefinition'));  // to EOF
+assert.ok(/ota:\s*true/.test(slaveBlock),
+          'slaveDefinition must include `ota: true` for Z2M OTA support');
+
 console.log('parity OK: selectedSlot = 0x' + selected.toString(16) +
             ', slotOccupied = 0x' + occupied.toString(16));

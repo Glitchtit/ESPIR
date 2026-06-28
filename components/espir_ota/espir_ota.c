@@ -20,12 +20,12 @@ static esp_ota_handle_t        s_handle;
 static bool                    s_in_progress;
 static bool                    s_first_block;
 
-esp_zb_attribute_list_t *espir_ota_cluster_create(void)
+esp_zb_attribute_list_t *espir_ota_cluster_create(uint16_t image_type)
 {
     esp_zb_ota_cluster_cfg_t ota_cfg = {
         .ota_upgrade_file_version        = ESPIR_FW_VERSION,
         .ota_upgrade_manufacturer        = ESPIR_MANUF_CODE,
-        .ota_upgrade_image_type          = ESPIR_OTA_IMAGE_TYPE,
+        .ota_upgrade_image_type          = image_type,
         .ota_upgrade_downloaded_file_ver = ESPIR_FW_VERSION,
     };
     esp_zb_attribute_list_t *ota = esp_zb_ota_cluster_create(&ota_cfg);

@@ -1,17 +1,20 @@
 #!/usr/bin/env python3
 """
-Wrap an ESP-IDF app binary in a Zigbee OTA Upgrade file and emit a Z2M index.
+Wrap an ESP-IDF app binary in a Zigbee OTA Upgrade file and upsert it into a Z2M index.
 
-Usage:
+Usage (one invocation per product binary):
   python tools/make_ota.py \
       --bin master/build/espir_master.bin \
       --proto components/espir_zcl/include/espir_proto.h \
       --url-base https://raw.githubusercontent.com/Glitchtit/ESPIR/<branch>/z2m/ota \
-      --out-dir z2m/ota --model ESPIR-MASTER
+      --out-dir z2m/ota --model ESPIR-MASTER \
+      --image-type 1 --out-name espir-master.ota
 
-Reads ESPIR_FW_VERSION / ESPIR_OTA_IMAGE_TYPE / ESPIR_MANUF_CODE from the proto header
-so the .ota header always matches the firmware. Writes <out-dir>/espir-master.ota and
-<out-dir>/index.json.
+Reads ESPIR_FW_VERSION / ESPIR_MANUF_CODE from the proto header so the .ota header always
+matches the firmware; the image type is passed explicitly (master=1, slave=2, slave-pcb=3)
+because the three product binaries share the manufacturer code. Writes <out-dir>/<out-name>
+and upserts a matching entry into <out-dir>/index.json (keyed by manufacturerCode+imageType),
+so multiple products coexist in one index.
 """
 import argparse, hashlib, json, os, re, struct
 
@@ -60,19 +63,36 @@ def index_entry(ota_path, url, manuf, image_type, file_version, model_id):
         "modelId": model_id,
     }
 
+def upsert_index(index_path, entry):
+    """Load index.json (or []), replace any entry with the same
+    (manufacturerCode, imageType), add this one, return the sorted list."""
+    index = []
+    if os.path.exists(index_path):
+        with open(index_path) as f:
+            index = json.load(f)
+    key = (entry["manufacturerCode"], entry["imageType"])
+    index = [e for e in index
+             if (e["manufacturerCode"], e["imageType"]) != key]
+    index.append(entry)
+    index.sort(key=lambda e: (e["manufacturerCode"], e["imageType"]))
+    return index
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--bin", required=True)
     ap.add_argument("--proto", required=True)
     ap.add_argument("--url-base", required=True, help="raw URL dir holding the .ota file")
     ap.add_argument("--out-dir", required=True)
-    ap.add_argument("--model", default="ESPIR-MASTER")
+    ap.add_argument("--model", required=True, help="modelId, e.g. ESPIR-MASTER / ESPIR-SLAVE")
+    ap.add_argument("--image-type", type=int, required=True,
+                    help="OTA image type (master=1, slave=2, slave-pcb=3)")
+    ap.add_argument("--out-name", required=True, help="output .ota filename, e.g. espir-master.ota")
     args = ap.parse_args()
 
     proto = open(args.proto).read()
-    manuf      = parse_define(proto, "ESPIR_MANUF_CODE")
-    image_type = parse_define(proto, "ESPIR_OTA_IMAGE_TYPE")
-    file_ver   = parse_define(proto, "ESPIR_FW_VERSION")
+    manuf    = parse_define(proto, "ESPIR_MANUF_CODE")
+    file_ver = parse_define(proto, "ESPIR_FW_VERSION")
+    image_type = args.image_type
 
     firmware = open(args.bin, "rb").read()
     blob = build_ota(firmware, manuf, image_type, file_ver, args.model.encode())
@@ -84,19 +104,21 @@ def main():
     assert h["total_size"] == len(blob)
 
     os.makedirs(args.out_dir, exist_ok=True)
-    ota_name = "espir-master.ota"
-    ota_path = os.path.join(args.out_dir, ota_name)
+    ota_path = os.path.join(args.out_dir, args.out_name)
     with open(ota_path, "wb") as f:
         f.write(blob)
 
-    url = args.url_base.rstrip("/") + "/" + ota_name
+    url = args.url_base.rstrip("/") + "/" + args.out_name
     entry = index_entry(ota_path, url, manuf, image_type, file_ver, args.model)
-    with open(os.path.join(args.out_dir, "index.json"), "w") as f:
-        json.dump([entry], f, indent=2)
+    index_path = os.path.join(args.out_dir, "index.json")
+    index = upsert_index(index_path, entry)
+    with open(index_path, "w") as f:
+        json.dump(index, f, indent=2)
         f.write("\n")
 
-    print(f"wrote {ota_path} ({len(blob)} bytes), fileVersion=0x{file_ver:08x}")
-    print(f"index url: {url}")
+    print(f"wrote {ota_path} ({len(blob)} bytes), imageType={image_type}, "
+          f"fileVersion=0x{file_ver:08x}")
+    print(f"index now has {len(index)} entries; url: {url}")
 
 if __name__ == "__main__":
     main()

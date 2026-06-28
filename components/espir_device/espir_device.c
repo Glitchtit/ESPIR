@@ -523,8 +523,8 @@ static esp_zb_ep_list_t *build_endpoint(void)
         esp_zb_cluster_list_add_power_config_cluster(cl, power, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE);
     }
 
-    if (s_cfg.ota) {   /* OTA Upgrade client — master only (slave keeps factory layout) */
-        esp_zb_attribute_list_t *ota = espir_ota_cluster_create();
+    if (s_cfg.ota) {   /* OTA Upgrade client — enabled per app via cfg.ota */
+        esp_zb_attribute_list_t *ota = espir_ota_cluster_create(s_cfg.ota_image_type);
         esp_zb_cluster_list_add_ota_cluster(cl, ota, ESP_ZB_ZCL_CLUSTER_CLIENT_ROLE);
     }
 
