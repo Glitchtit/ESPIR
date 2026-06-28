@@ -231,7 +231,12 @@ const masterDefinition = {
     model: 'ESPIR-MASTER',
     vendor: 'ESPIR',
     description: 'ESP32-C6 Zigbee IR blaster — master (learn + store + transmit)',
-    extend: [espirCluster, m.ota()],
+    extend: [espirCluster],
+    ota: true,   // Z2M OTA support. herdsman-converters declares OTA via the top-level
+                 // `ota: true` definition property (used by the device's OTA cluster +
+                 // the configured/override OTA index). NOTE: do NOT use modernExtend
+                 // m.ota() — it does not exist in the deployed converter versions
+                 // (e.g. 26.63.0) and throws at load, discarding the whole file.
     fromZigbee: [fzEspir, fzEspirRaw],
     toZigbee: [tzSlot, tzAction, tzLearn, tzSend, tzClear, tzProgram, tzReplicate],
     configure: espirConfigure,

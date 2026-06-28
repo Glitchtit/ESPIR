@@ -22,11 +22,13 @@ const occupied = protoAttr('ESPIR_ATTR_SLOT_OCCUPIED');
 assert.strictEqual(occupied, 0x000A, 'proto SLOT_OCCUPIED must be 0x000A');
 assert.strictEqual(jsAttr('slotOccupied'), occupied, 'espir.js slotOccupied must mirror proto');
 
-// OTA: the master definition must declare modernExtend OTA support.
+// OTA: the master definition must declare OTA support via the top-level `ota: true`
+// property (herdsman-converters' supported form; m.ota() modernExtend does not exist
+// in deployed converter versions and throws at load).
 const masterBlock = js.slice(js.indexOf('const masterDefinition'),
                              js.indexOf('const slaveDefinition'));
-assert.ok(/m\.ota\(\)/.test(masterBlock),
-          'masterDefinition extend must include m.ota() for Z2M OTA support');
+assert.ok(/ota:\s*true/.test(masterBlock),
+          'masterDefinition must include `ota: true` for Z2M OTA support');
 
 console.log('parity OK: selectedSlot = 0x' + selected.toString(16) +
             ', slotOccupied = 0x' + occupied.toString(16));
