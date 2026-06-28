@@ -165,6 +165,24 @@ The HA **Slot** selector drives the device over the `selectSlot` command (manufa
 ZCL attributes aren't OTA-writable on zboss). The device reports the active slot and whether it
 holds a code back to HA (`slot_occupied`) and to the master OLED.
 
+## Over-the-air updates (master)
+
+The master supports Zigbee OTA firmware updates via Zigbee2MQTT.
+
+**One-time migration:** the OTA-capable firmware uses a new dual-slot partition table,
+so the first time you load it you must flash over USB (`cd master && idf.py flash`).
+The device re-pairs to your Zigbee network once after this flash. All later updates are
+wireless.
+
+**Point Z2M at the image index** — in your Zigbee2MQTT `configuration.yaml`:
+
+    ota:
+      zigbee_ota_override_index_location: https://raw.githubusercontent.com/Glitchtit/ESPIR/main/z2m/ota/index.json
+
+Restart Z2M. `ESPIR-MASTER` then appears in the OTA tab. Click "Check", then "Update"
+when a newer version is offered. The device downloads in the background, reboots into the
+new firmware, and confirms it; a bad image rolls back automatically on next boot.
+
 ## Status
 
 Firmware and host integration are written and **both apps build clean** for esp32c6
