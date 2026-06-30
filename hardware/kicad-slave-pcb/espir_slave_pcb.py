@@ -179,10 +179,10 @@ C2  = Part('Device', 'C', value='100nF', footprint=C0603, ref='C2');  V3V3 += C2
 R10 = Part('Device', 'R', value='100k', footprint=R0603, ref='R10'); V3V3 += R10[1]; R10[2] += EN     # EN pull-up
 C11 = Part('Device', 'C', value='100nF', footprint=C0603, ref='C11'); EN  += C11[1]; C11[2] += GND    # EN cap
 SW1 = Part('Switch', 'SW_Push', value='RESET',
-           footprint='Button_Switch_THT:SW_PUSH_6mm', ref='SW1')
+           footprint='Button_Switch_SMD:SW_Push_1P1T_NO_CK_KMR2', ref='SW1')
 SW1[1] += EN;   SW1[2] += GND
 SW2 = Part('Switch', 'SW_Push', value='BOOT',
-           footprint='Button_Switch_THT:SW_PUSH_6mm', ref='SW2')
+           footprint='Button_Switch_SMD:SW_Push_1P1T_NO_CK_KMR2', ref='SW2')
 SW2[1] += BOOT; SW2[2] += GND
 R8 = Part('Device', 'R', value='100k', footprint=R0603, ref='R8'); V3V3 += R8[1]; R8[2] += STRAP8   # GPIO8 strap pull-up
 R9 = Part('Device', 'R', value='100k', footprint=R0603, ref='R9'); V3V3 += R9[1]; R9[2] += BOOT     # GPIO9 strap pull-up

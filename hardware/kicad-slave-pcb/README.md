@@ -38,6 +38,7 @@ espir_slave_pcb.py ─┤  (+ SKiDL ERC)
 | `fix_silk.py`            | Collision-aware silkscreen designator placement; hides refs with no clear spot. |
 | `en_jumper.py`           | Jumpers the LDO EN→VIN tie on B.Cu (boxed pins Freerouting can't tie). |
 | `mounting_and_round.py`  | Expand X (centred), round the corners (r=3 mm), add 4× M3 mounting holes. |
+| `swap_smd_button.py`     | Swap one button THT→SMD on the routed board (bridge signal, reconnect inner layers via a via, GND via pour). |
 | `espir_slave_pcb.kicad_pcb` | **4-layer** KiCad board: 38 footprints, **fully routed**, 0.5 mm power incl. VBAT, GND planes, centred on A4. |
 | `espir_slave_pcb.kicad_dru` | Critical-signal **routing rules** (power width, IR-pulse width, sense-vs-IR clearance, USB width) — DRC auto-enforces them. |
 | `espir_slave_pcb.kicad_pro` | KiCad project (open this). |
@@ -80,7 +81,7 @@ USB on GPIO12/GPIO13, boot on GPIO9, strap pull-up on GPIO8.
 ESP32-C6-MINI-1 module · AP2112K-3.3 LDO · MCP73831 LiPo charger · AO3401A
 load-share P-FET · B5819W (1N5819) OR-ing Schottky · AO3400A IR-driver N-FET ·
 2× IR333C 940 nm IR LED · WS2812 RGB status LED · charge LED · USB-C (HRO
-TYPE-C-31-M-12) · JST-SH LiPo connector · SS12D07VG6 slide switch · 2× tactile
+TYPE-C-31-M-12) · JST-SH LiPo connector · SS12D07VG6 slide switch · 2× SMD tactile (KMR2)
 buttons · 17 resistors · 7 capacitors. Full values + LCSC numbers are in
 [`../pcb-fully-custom.md`](../pcb-fully-custom.md).
 
