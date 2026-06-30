@@ -48,6 +48,9 @@ def set_net_classes():
 
 # Board envelope (mm). Origin top-left; +x right, +y down (KiCad screen coords).
 BW, BH = 52.0, 47.0
+# Offset so the board sits centred on the A4 (297x210mm) drawing sheet, not in the
+# top-left corner. PLACE coords below stay board-local (0..BW, 0..BH); OX/OY shift them.
+OX, OY = (297.0 - BW) / 2, (210.0 - BH) / 2   # = 122.5, 81.5
 
 # Functional placement table:  ref -> (x_mm, y_mm, rotation_deg)
 # The ESP32-C6-MINI-1 sits antenna-UP at the top edge: its built-in antenna
@@ -56,8 +59,11 @@ BW, BH = 52.0, 47.0
 # lower two thirds, with generous spacing so no part bodies collide. Routing,
 # GND pours and final nudging are the human finishing pass.
 PLACE = {
-    # --- ESP32-C6-MINI-1 module: top-centre, antenna overhangs the top edge --
-    "U5":   (26.0, 22.0, 0),
+    # --- ESP32-C6-MINI-1 module: body at the TOP EDGE so the antenna + its
+    #     `tracks not_allowed` keep-out (y -5.6..-26 from origin) hangs OFF the
+    #     top edge (y<0). Origin y=6 → body y[1,11] on-board, keep-out off-board,
+    #     so the top-corner parts (U2/U3/LED1/R1) are clear of it and routable.
+    "U5":   (26.0, 6.0, 0),
 
     # --- IR sender (top-left corner: 5 mm IR LEDs fire up/off the board) -----
     "U2":   (6.0, 7.0, 0),       # IR LED 1
@@ -124,14 +130,14 @@ def main():
         if fp is None:
             missing.append(ref)
             continue
-        fp.SetPosition(pcbnew.VECTOR2I(MM(x), MM(y)))
+        fp.SetPosition(pcbnew.VECTOR2I(MM(x + OX), MM(y + OY)))
         fp.SetOrientationDegrees(rot)
         placed += 1
 
     # Any footprint not in the table (shouldn't happen) -> park it below the board
     parked = [r for r in by_ref if r not in PLACE]
     for i, r in enumerate(parked):
-        by_ref[r].SetPosition(pcbnew.VECTOR2I(MM(2 + 4 * i), MM(BH + 6)))
+        by_ref[r].SetPosition(pcbnew.VECTOR2I(MM(2 + 4 * i + OX), MM(BH + 6 + OY)))
 
     # --- Edge.Cuts rectangle outline ---------------------------------------
     # Clear any existing edge segments first.
@@ -143,8 +149,8 @@ def main():
         seg = pcbnew.PCB_SHAPE(board)
         seg.SetShape(pcbnew.SHAPE_T_SEGMENT)
         seg.SetLayer(pcbnew.Edge_Cuts)
-        seg.SetStart(pcbnew.VECTOR2I(MM(x1), MM(y1)))
-        seg.SetEnd(pcbnew.VECTOR2I(MM(x2), MM(y2)))
+        seg.SetStart(pcbnew.VECTOR2I(MM(x1 + OX), MM(y1 + OY)))
+        seg.SetEnd(pcbnew.VECTOR2I(MM(x2 + OX), MM(y2 + OY)))
         seg.SetWidth(MM(0.15))
         board.Add(seg)
 
