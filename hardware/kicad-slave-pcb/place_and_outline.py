@@ -10,10 +10,41 @@ finishing pass (same division of labour the skill describes).
 
 Run:  python place_and_outline.py
 """
-import pcbnew
+import pcbnew, json, os
 
 BRD = "espir_slave_pcb.kicad_pcb"
+PRO = "espir_slave_pcb.kicad_pro"
 MM = pcbnew.FromMM
+
+# Net classes so the autorouter + DRC widen the current-carrying nets (the skill's
+# critical-signal widths; mirrors espir_slave_pcb.kicad_dru). kinet2pcb regenerates
+# the .kicad_pro, so (re)apply these here in the post-kinet2pcb pcbnew pass.
+NET_CLASSES = {
+    "Power": {"track_width": 0.5, "via_diameter": 0.8, "via_drill": 0.4,
+              "nets": ["GND", "V3V3", "V5", "VSYS", "VBAT", "VCELL"]},
+    "IR":    {"track_width": 0.4, "nets": ["IRD"]},
+}
+
+def set_net_classes():
+    if not os.path.exists(PRO):
+        print("no .kicad_pro yet; skipping net classes"); return
+    d = json.load(open(PRO))
+    ns = d.setdefault("net_settings", {})
+    classes = ns.setdefault("classes", [])
+    default = next((c for c in classes if c.get("name") == "Default"), {})
+    patterns = []
+    classes = [c for c in classes if c.get("name") not in NET_CLASSES]   # rebuild ours
+    for name, spec in NET_CLASSES.items():
+        c = dict(default); c.update(name=name, track_width=spec["track_width"])
+        for k in ("via_diameter", "via_drill"):
+            if k in spec: c[k] = spec[k]
+        c.pop("priority", None)
+        classes.append(c)
+        patterns += [{"netclass": name, "pattern": n} for n in spec["nets"]]
+    ns["classes"] = classes
+    ns["netclass_patterns"] = patterns
+    json.dump(d, open(PRO, "w"), indent=2)
+    print(f"net classes: {', '.join(NET_CLASSES)} + {len(patterns)} net assignments")
 
 # Board envelope (mm). Origin top-left; +x right, +y down (KiCad screen coords).
 BW, BH = 52.0, 47.0
@@ -120,6 +151,7 @@ def main():
     pcbnew.SaveBoard(BRD, board)
     print(f"placed={placed}  missing={missing}  parked={parked}")
     print(f"outline: {BW} x {BH} mm rectangle on Edge.Cuts")
+    set_net_classes()
 
 
 if __name__ == "__main__":

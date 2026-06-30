@@ -12,3 +12,7 @@ fp-info-cache
 __pycache__/
 skidl.erc
 skidl.log
+# Freerouting (download separately) + its intermediates
+freerouting.jar
+*.dsn
+*.ses

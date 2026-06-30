@@ -5,10 +5,11 @@ captured in EasyEDA Pro (see [`../pcb-fully-custom.md`](../pcb-fully-custom.md))
 that board file "lives in the EasyEDA workspace, not in git." This directory is
 the same circuit rebuilt **in KiCad**, fully in-repo and reproducible from source.
 
-Schematic (connect-by-name net labels) and board placement:
+Schematic (connect-by-name net labels), placement, and the autorouted board:
 
 ![schematic preview](schematic-preview.png)
 ![placement preview](placement-preview.png)
+![routed preview](routed-preview.png)
 
 ## What this is
 
@@ -31,8 +32,9 @@ espir_slave_pcb.py ─┤  (+ SKiDL ERC)
 | `espir_slave_pcb.net`    | Generated KiCad netlist (authoritative connectivity). |
 | `make_schematic.py`      | netlist → `.kicad_sch` (real symbols embedded; connect-by-name labels). |
 | `espir_slave_pcb.kicad_sch` | KiCad schematic: 38 components, 25 nets — connectivity is an **exact match** to the netlist. |
-| `place_and_outline.py`   | `pcbnew` pass: functional placement + Edge.Cuts outline. |
-| `espir_slave_pcb.kicad_pcb` | KiCad board: 38 footprints, all nets, 52×47 mm outline. |
+| `place_and_outline.py`   | `pcbnew` pass: functional placement + Edge.Cuts outline + Power/IR net classes. |
+| `route.sh`               | Autoroute via Freerouting (DSN → SES). KiCad has no built-in headless autorouter. |
+| `espir_slave_pcb.kicad_pcb` | KiCad board: 38 footprints, **autorouted** (≈90%), wide power, 52×47 mm outline. |
 | `espir_slave_pcb.kicad_dru` | Critical-signal **routing rules** (power width, IR-pulse width, sense-vs-IR clearance, USB width) — DRC auto-enforces them. |
 | `espir_slave_pcb.kicad_pro` | KiCad project (open this). |
 | `build.sh`               | Reproduces everything from source. |
@@ -97,22 +99,28 @@ pip install skidl kinet2pcb
   `.kicad_sch` and re-extracts the **exact same 25 multi-pin nets** as the SKiDL
   netlist (verified set-equal). The schematic is a faithful graphical view of the
   circuit.
-- **Board (`kicad-cli pcb drc`):** the only "errors" are the **114 unconnected
-  ratsnest items** (the board is placed but *not yet routed*) plus silkscreen-text
-  overlaps, the module's antenna keep-out zone, and edge-connector clearances.
-  **No connectivity/circuit errors.**
+- **Routing (`route.sh` → Freerouting):** autorouted **104 of 114** connections
+  (310 tracks, 26 vias). The **Power/IR net classes route the rails wide** (0.5 mm /
+  0.4 mm) — DRC `track_width` violations dropped from 199 (uniform-width route) to 8
+  once the net classes were carried into the DSN.
+- **Board (`kicad-cli pcb drc`):** the remaining items are **10 unrouted** (the IR-LED
+  corner + WS2812 group — too cramped to reach on 2 layers), plus auto-route roughness
+  (a few tracks in the module antenna keep-out / near board edges) and the pre-existing
+  silkscreen/courtyard placement items. **No connectivity/circuit errors.**
 
 ## Remaining work (the human finishing pass)
 
 Same division of labour the EasyEDA workflow uses — the circuit + a clean,
 function-grouped starting layout are done; the fab finishing is left to a human:
 
-1. **Route** the 114 ratsnest connections (KiCad has no headless autorouter;
-   route interactively or via the Freerouting plugin). Route critical signals
-   first — the rules in `espir_slave_pcb.kicad_dru` (power ≥0.5 mm, IR-pulse
-   ≥0.4 mm, sense taps ≥1 mm from the IR drive, USB width) are DRC-enforced. For
-   a true 90 Ω USB pair, rename `USB_DM`/`USB_DP` → `USB_D-`/`USB_D+`, set the
-   stackup, and use Route → Differential Pair + Tune Skew.
+1. **Finish routing** the last 10 connections (IR-LED corner + WS2812 group) by
+   hand, and clean up the auto-route (pull tracks out of the antenna keep-out and
+   off the board edge). On 2 layers this corner is cramped — **4 layers would let it
+   fully autoroute** (the inner GND plane frees the outer layers). The critical-signal
+   rules in `espir_slave_pcb.kicad_dru` (power ≥0.5 mm, IR-pulse ≥0.4 mm, sense taps
+   ≥1 mm from the IR drive, USB width) are DRC-enforced. For a true 90 Ω USB pair,
+   rename `USB_DM`/`USB_DP` → `USB_D-`/`USB_D+`, set the stackup, and use
+   Route → Differential Pair + Tune Skew.
 2. **GND copper pours** top + bottom, stitched with vias.
 3. Nudge silkscreen, confirm the **antenna keep-out** is clear of copper and the
    module antenna overhangs the top edge, verify **edge connectors** (USB-C bottom,
