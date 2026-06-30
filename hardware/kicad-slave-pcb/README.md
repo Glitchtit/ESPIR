@@ -34,7 +34,7 @@ espir_slave_pcb.py ─┤  (+ SKiDL ERC)
 | `espir_slave_pcb.kicad_sch` | KiCad schematic: 38 components, 25 nets — connectivity is an **exact match** to the netlist. |
 | `place_and_outline.py`   | `pcbnew` pass: 4-layer setup + functional placement + Edge.Cuts + Power/IR net classes. |
 | `route.sh`               | Autoroute via Freerouting (DSN → SES). KiCad has no built-in headless autorouter. |
-| `pour_gnd.py`            | GND pours on all 4 layers + solid GND-pad connection + collision-checked via stitching. |
+| `pour_gnd.py`            | GND pours on all 4 layers + solid GND-pad connection + collision-checked via stitching. `planes-only` mode pours the planes without stitching (run before routing). |
 | `fix_silk.py`            | Collision-aware silkscreen designator placement; hides refs with no clear spot. |
 | `en_jumper.py`           | Jumpers the LDO EN→VIN tie on B.Cu (boxed pins Freerouting can't tie). |
 | `mounting_and_round.py`  | Expand X (centred), round the corners (r=3 mm), add 4× M3 mounting holes. |
@@ -111,6 +111,10 @@ pip install skidl kinet2pcb
 - **4-layer stackup** (F / In1 / In2 / B) with **GND pours on all four layers** + a
   collision-checked stitching-via grid — the inner copper acts as ground reference planes
   for stability. The extra routing room lets **every power rail, incl. VBAT, route at 0.5 mm**.
+- **Pour order: GND planes are poured *before* routing** (`pour_gnd.py planes-only`), so the
+  Specctra DSN exports GND as `(plane …)` per layer and Freerouting routes **only the signal
+  nets** — no redundant GND traces, just the pad-to-plane vias GND needs. A full `pour_gnd.py`
+  after routing re-fills around the new tracks and adds stitching.
 - **Routing (`route.sh` → Freerouting, 4-layer):** **fully routed — 114/114** (310 tracks,
   43 vias incl. stitching). All `Power`-class rails are 0.5 mm. The LDO EN pin (tied to VSYS,
   boxed between U6's VIN/GND pins) is jumpered VIN→EN on B.Cu under the GND pin.

@@ -5,6 +5,11 @@
 #
 #   .kicad_pcb --pcbnew ExportSpecctraDSN--> .dsn --freerouting--> .ses --pcbnew ImportSpecctraSES--> routed .kicad_pcb
 #
+# IMPORTANT: run `pour_gnd.py planes-only` BEFORE this (build.sh does). A filled GND
+# zone exports as `(plane GND ...)` per layer, so Freerouting treats GND as already
+# connected and routes ONLY the signal nets — no redundant GND traces, and it adds
+# just the pad-to-plane vias GND actually needs. Re-fill + stitch after with full pour_gnd.py.
+#
 # Needs: java + freerouting.jar (https://github.com/freerouting/freerouting/releases).
 # Set FREEROUTING_JAR or drop freerouting.jar next to this script.
 set -euo pipefail

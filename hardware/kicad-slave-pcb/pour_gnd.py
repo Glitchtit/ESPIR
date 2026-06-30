@@ -1,10 +1,20 @@
 #!/usr/bin/env python3
 """
-4-layer GND pours + via stitching (run after routing). Pours a GND zone on every
-copper layer (F / In1 / In2 / B) so the inner layers act as ground reference
-planes and all GND pads/fragments tie together, then stitches the layers with a
-collision-checked GND via grid. Run after route.sh.
+4-layer GND pours + via stitching. Pours a GND zone on every copper layer
+(F / In1 / In2 / B) so the inner layers act as ground reference planes and all
+GND pads/fragments tie together, then stitches the layers with a collision-checked
+GND via grid.
+
+Two modes:
+  python pour_gnd.py                # full: pour + fill + stitch (run AFTER routing)
+  python pour_gnd.py planes-only    # pour + fill only, NO stitching (run BEFORE routing)
+
+Run `planes-only` BEFORE route.sh so the filled GND zones export to Freerouting as
+`(plane GND ...)` — Freerouting then treats GND as already-connected and routes only
+the signal nets (no redundant GND traces). Then run the full mode after routing to
+re-fill around the new tracks and add stitching. See build.sh.
 """
+import sys
 import pcbnew
 
 BRD = "espir_slave_pcb.kicad_pcb"
@@ -12,7 +22,7 @@ MM = pcbnew.FromMM
 TOMM = pcbnew.ToMM
 
 
-def main():
+def main(planes_only=False):
     b = pcbnew.LoadBoard(BRD)
     gnd = b.FindNet("GND").GetNetCode()
     e = b.GetBoardEdgesBoundingBox()
@@ -62,6 +72,11 @@ def main():
     pcbnew.ZONE_FILLER(b).Fill(b.Zones())
     print(f"poured GND on {len(layers)} layers")
 
+    if planes_only:                             # planes for the DSN; stitch after routing
+        pcbnew.SaveBoard(BRD, b)
+        print("planes-only: skipped stitching (run full pour_gnd after routing)")
+        return
+
     # --- collision-checked GND via stitching grid (pads/obst cached above) ----
     via_r = MM(0.4)            # via OD 0.8 -> radius 0.4
     clr = MM(0.3)
@@ -94,4 +109,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    main(planes_only=any(a in ("planes-only", "zones-only") for a in sys.argv[1:]))

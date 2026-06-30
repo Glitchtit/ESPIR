@@ -33,15 +33,19 @@ kinet2pcb -i espir_slave_pcb.net -o espir_slave_pcb.kicad_pcb -w --nobackup \
 echo ">> 3. pcbnew: 4-layer setup + functional placement + board outline + net classes"
 python place_and_outline.py
 
-echo ">> 4. autoroute (Freerouting, 4-layer) — needs freerouting.jar (see route.sh)"
+echo ">> 4. GND planes FIRST — so the DSN exports GND as (plane) and Freerouting"
+echo ">>    routes only signals (no redundant GND traces). Stitching comes after routing."
+python pour_gnd.py planes-only
+
+echo ">> 5. autoroute (Freerouting, 4-layer) — needs freerouting.jar (see route.sh)"
 [ -f "${FREEROUTING_JAR:-./freerouting.jar}" ] && ./route.sh || \
   echo "   (skipped: no freerouting.jar; run route.sh once it's available)"
 
-echo ">> 5. GND pours (4 layers) + via stitching, then silkscreen cleanup"
+echo ">> 6. re-fill GND pours around the new signal tracks + via stitching, then silk"
 python pour_gnd.py
 python fix_silk.py
 
-echo ">> 6. DRC"
+echo ">> 7. DRC"
 kicad-cli pcb drc --exit-code-violations espir_slave_pcb.kicad_pcb \
           -o /tmp/espir_slave_drc.rpt || true
 grep -E 'Found .* violations|Found .* unconnected' /tmp/espir_slave_drc.rpt || true
