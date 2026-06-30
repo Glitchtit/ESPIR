@@ -21,6 +21,13 @@ def main():
     x2, y2 = e.GetRight() - inset, e.GetBottom() - inset
     corners = [(x1, y1), (x2, y1), (x2, y2), (x1, y2)]
 
+    # Solid (non-thermal) zone connection for every GND pad — avoids starved-thermal
+    # on pads the pour can only reach narrowly; fine for a ground-plane board (reflow).
+    for fp in b.GetFootprints():
+        for p in fp.Pads():
+            if p.GetNetCode() == gnd:
+                p.SetLocalZoneConnection(pcbnew.ZONE_CONNECTION_FULL)
+
     # remove any pre-existing zones (idempotent re-runs)
     for z in list(b.Zones()):
         b.Remove(z)

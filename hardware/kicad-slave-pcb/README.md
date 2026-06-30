@@ -34,8 +34,9 @@ espir_slave_pcb.py ─┤  (+ SKiDL ERC)
 | `espir_slave_pcb.kicad_sch` | KiCad schematic: 38 components, 25 nets — connectivity is an **exact match** to the netlist. |
 | `place_and_outline.py`   | `pcbnew` pass: 4-layer setup + functional placement + Edge.Cuts + Power/IR net classes. |
 | `route.sh`               | Autoroute via Freerouting (DSN → SES). KiCad has no built-in headless autorouter. |
-| `pour_gnd.py`            | GND pours on all 4 layers + collision-checked via stitching (run after routing). |
+| `pour_gnd.py`            | GND pours on all 4 layers + solid GND-pad connection + collision-checked via stitching. |
 | `fix_silk.py`            | Collision-aware silkscreen designator placement; hides refs with no clear spot. |
+| `en_jumper.py`           | Jumpers the LDO EN→VIN tie on B.Cu (boxed pins Freerouting can't tie). |
 | `espir_slave_pcb.kicad_pcb` | **4-layer** KiCad board: 38 footprints, **fully routed**, 0.5 mm power incl. VBAT, GND planes, centred on A4. |
 | `espir_slave_pcb.kicad_dru` | Critical-signal **routing rules** (power width, IR-pulse width, sense-vs-IR clearance, USB width) — DRC auto-enforces them. |
 | `espir_slave_pcb.kicad_pro` | KiCad project (open this). |
@@ -126,10 +127,17 @@ pip install skidl kinet2pcb
 Same division of labour the EasyEDA workflow uses — the circuit + a clean,
 function-grouped starting layout are done; the fab finishing is left to a human:
 
-1. **Optional polish:** trim U5/USB-C footprint silk that overhangs the edges (the 4
-   benign `silk_edge_clearance`), or just leave it (fab clips it). For a true 90 Ω USB
-   pair, rename `USB_DM`/`USB_DP` → `USB_D-`/`USB_D+`, set the stackup, and use
-   Route → Differential Pair + Tune Skew. (4 layers would let VBAT route wide too.)
+1. **Edge clearance for passives:** `place_and_outline.py` now enforces ≥1 mm board-edge
+   clearance for every non-port/antenna part and places the USB-C CC pulldowns right at the
+   connector. In the **committed board** the charge LED (LED2) + its ballast (R14) still sit
+   ~0.8 mm from the bottom edge (within fab spec, but tight). Pushing them further means
+   re-placing the dense USB-C/charger/divider cluster — a fresh `build.sh` regen applies the
+   improved placement, but the bottom-center density leaves the **LDO EN tie + IR gate stub**
+   for a short KiCad GUI routing session (interactive routing handles them trivially). The
+   committed `.kicad_pcb` stays the verified-clean artifact.
+2. **Optional polish:** trim U5/USB-C footprint silk that overhangs the edges (the 4 benign
+   `silk_edge_clearance`), or leave it (fab clips it). For a true 90 Ω USB pair, rename
+   `USB_DM`/`USB_DP` → `USB_D-`/`USB_D+`, set the stackup, Route → Differential Pair + Tune Skew.
 2. ~~GND copper pours~~ — done (`pour_gnd.py`: all 4 layers + stitching vias).
 3. Nudge silkscreen, confirm the **antenna keep-out** is clear of copper and the
    module antenna overhangs the top edge, verify **edge connectors** (USB-C bottom,

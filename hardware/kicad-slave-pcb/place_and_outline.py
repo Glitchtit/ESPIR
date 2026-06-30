@@ -86,20 +86,22 @@ PLACE = {
     "C13":  (12.0, 33.0, 90),    # VBAT bulk
 
     # --- Power tree: load-share + OR-ing + LDO (centre band) ----------------
-    "Q4":   (20.0, 33.0, 0),     # load-share P-FET
-    "D1":   (20.0, 37.0, 0),     # OR-ing Schottky
+    "Q4":   (15.0, 33.0, 0),     # load-share P-FET
+    "D1":   (15.0, 37.0, 0),     # OR-ing Schottky (moved left, off the USB-C CC pads)
     "U6":   (27.0, 37.0, 0),     # AP2112K LDO
-    "C14":  (24.0, 33.0, 90),    # VSYS bulk
+    "C14":  (11.0, 37.0, 90),    # VSYS bulk
     "C15":  (31.0, 33.0, 90),    # V3V3 bulk
 
     # --- USB-C + charger (bottom-centre, USB-C mouth off the bottom edge) ----
-    "USBC1": (21.0, 44.0, 0),    # USB-C at bottom edge
-    "R11":  (11.5, 40.0, 90),    # CC1 pulldown (clear of USB-C body)
-    "R12":  (11.5, 43.0, 90),    # CC2 pulldown
-    "U8":   (30.0, 42.0, 0),     # MCP73831 charger
-    "R13":  (35.0, 42.0, 0),     # PROG
-    "LED2": (30.0, 45.5, 0),     # charge status LED
-    "R14":  (35.0, 45.5, 0),
+    "USBC1": (21.0, 44.0, 0),    # USB-C at bottom edge (port — belongs at the edge)
+    # CC pulldowns directly above the USB-C CC pads (A5/B5 at local x19.75/22.75, y40)
+    # so the CC1/CC2 nets route with a short vertical stub (else A5 is boxed in).
+    "R11":  (19.75, 37.0, 90),   # CC1 pulldown above A5
+    "R12":  (22.75, 37.0, 90),   # CC2 pulldown above B5
+    "U8":   (32.0, 40.0, 0),     # MCP73831 charger (right of U6, clear of bottom edge)
+    "R13":  (36.5, 40.0, 0),     # PROG
+    "LED2": (32.0, 43.5, 0),     # charge status LED
+    "R14":  (36.5, 43.5, 0),
 
     # --- 3V3 decoupling at the module power pin -----------------------------
     "C1":   (34.0, 33.0, 90),
@@ -141,6 +143,31 @@ def main():
     parked = [r for r in by_ref if r not in PLACE]
     for i, r in enumerate(parked):
         by_ref[r].SetPosition(pcbnew.VECTOR2I(MM(2 + 4 * i + OX), MM(BH + 6 + OY)))
+
+    # Edge-margin enforcement: keep non-port / non-antenna parts (passives, discretes,
+    # ICs) at least MARGIN from every board edge, so only the connectors/antenna/switches
+    # sit at the edge. Pushes an offender inward by just enough to clear.
+    EXEMPT = {"USBC1", "U7", "U5", "SW1", "SW2", "SW3"}   # USB-C, JST, module/antenna, switches
+    MARGIN = MM(1.0)
+    ex1, ey1, ex2, ey2 = MM(OX), MM(OY), MM(OX + BW), MM(OY + BH)
+    for fp in board.GetFootprints():
+        if fp.GetReference() in EXEMPT:
+            continue
+        cy = fp.GetCourtyard(pcbnew.F_CrtYd)
+        bb = cy.BBox() if not cy.IsEmpty() else fp.GetBoundingBox(False, False)
+        dx = dy = 0
+        if bb.GetLeft() < ex1 + MARGIN:
+            dx = (ex1 + MARGIN) - bb.GetLeft()
+        elif bb.GetRight() > ex2 - MARGIN:
+            dx = (ex2 - MARGIN) - bb.GetRight()
+        if bb.GetTop() < ey1 + MARGIN:
+            dy = (ey1 + MARGIN) - bb.GetTop()
+        elif bb.GetBottom() > ey2 - MARGIN:
+            dy = (ey2 - MARGIN) - bb.GetBottom()
+        if dx or dy:
+            p = fp.GetPosition()
+            fp.SetPosition(pcbnew.VECTOR2I(p.x + dx, p.y + dy))
+            print(f"  edge-margin: nudged {fp.GetReference()} by ({MM(dx) if False else round(dx/1e6,2)},{round(dy/1e6,2)})mm")
 
     # --- Edge.Cuts rectangle outline ---------------------------------------
     # Clear any existing edge segments first.
