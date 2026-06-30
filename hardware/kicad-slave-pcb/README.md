@@ -32,9 +32,11 @@ espir_slave_pcb.py ─┤  (+ SKiDL ERC)
 | `espir_slave_pcb.net`    | Generated KiCad netlist (authoritative connectivity). |
 | `make_schematic.py`      | netlist → `.kicad_sch` (real symbols embedded; connect-by-name labels). |
 | `espir_slave_pcb.kicad_sch` | KiCad schematic: 38 components, 25 nets — connectivity is an **exact match** to the netlist. |
-| `place_and_outline.py`   | `pcbnew` pass: functional placement + Edge.Cuts outline + Power/IR net classes. |
+| `place_and_outline.py`   | `pcbnew` pass: 4-layer setup + functional placement + Edge.Cuts + Power/IR net classes. |
 | `route.sh`               | Autoroute via Freerouting (DSN → SES). KiCad has no built-in headless autorouter. |
-| `espir_slave_pcb.kicad_pcb` | KiCad board: 38 footprints, **autorouted** (≈98%), wide power, centred on A4, module at top edge. |
+| `pour_gnd.py`            | GND pours on all 4 layers + collision-checked via stitching (run after routing). |
+| `fix_silk.py`            | Collision-aware silkscreen designator placement; hides refs with no clear spot. |
+| `espir_slave_pcb.kicad_pcb` | **4-layer** KiCad board: 38 footprints, **fully routed**, 0.5 mm power incl. VBAT, GND planes, centred on A4. |
 | `espir_slave_pcb.kicad_dru` | Critical-signal **routing rules** (power width, IR-pulse width, sense-vs-IR clearance, USB width) — DRC auto-enforces them. |
 | `espir_slave_pcb.kicad_pro` | KiCad project (open this). |
 | `build.sh`               | Reproduces everything from source. |
@@ -103,18 +105,21 @@ pip install skidl kinet2pcb
   `.kicad_sch` and re-extracts the **exact same 25 multi-pin nets** as the SKiDL
   netlist (verified set-equal). The schematic is a faithful graphical view of the
   circuit.
-- **Routing (`route.sh` → Freerouting):** **fully routed — 114/114 connections**
-  (540 tracks, 27 vias). The **main power rails route wide (0.5 mm)** via the Power net
-  class; **VBAT** keeps the default width in the congested charger corner (2-layer can't
-  widen it there without clearance violations — fine for ~0.5 A charge; see `.kicad_dru`).
-- **Module placement:** U5 sits with its body at the **top edge so the antenna and its
-  `tracks not_allowed` keep-out hang OFF the board** (y<0) — otherwise the keep-out covers
-  the interior and the IR LEDs / WS2812 under it become un-routable.
-- **Board centred** on the A4 drawing sheet (~148.5, 105 mm), not in the corner.
-- **DRC (`kicad-cli pcb drc`): clean except 4 benign items.** 0 unconnected, 0 track-width,
-  0 clearance, 0 copper-edge-clearance. The only 4 left are `silk_edge_clearance` — U5's
-  antenna outline and USB-C's connector outline overhanging their board edges (by design;
-  fab clips edge silk). LED2/USBC1 silk refs are hidden (saturated cluster; still in BOM/CPL).
+- **4-layer stackup** (F / In1 / In2 / B) with **GND pours on all four layers** + a
+  collision-checked stitching-via grid — the inner copper acts as ground reference planes
+  for stability. The extra routing room lets **every power rail, incl. VBAT, route at 0.5 mm**.
+- **Routing (`route.sh` → Freerouting, 4-layer):** **fully routed — 114/114** (310 tracks,
+  43 vias incl. stitching). All `Power`-class rails are 0.5 mm. The LDO EN pin (tied to VSYS,
+  boxed between U6's VIN/GND pins) is jumpered VIN→EN on B.Cu under the GND pin.
+- **Module placement:** U5's body is at the **top edge so the antenna `tracks not_allowed`
+  keep-out hangs OFF the board** — otherwise it covers the interior and the parts under it
+  can't route.
+- **Board centred** on the A4 drawing sheet (148.5, 105 mm).
+- **DRC (`kicad-cli pcb drc`): 0 electrical violations** — 0 unconnected, 0 track-width,
+  0 clearance, 0 copper-edge, 0 shorts. Remaining: **4 `silk_edge_clearance`** (U5 antenna +
+  USB-C outlines overhanging their edges, by design — fab clips edge silk) and **1
+  `lib_footprint_mismatch`** (U5 board copy vs the latest library version — same 61 pads,
+  benign). LED2/USBC1 silk refs hidden (saturated cluster; still in BOM/CPL).
 
 ## Remaining work (the human finishing pass)
 
@@ -125,7 +130,7 @@ function-grouped starting layout are done; the fab finishing is left to a human:
    benign `silk_edge_clearance`), or just leave it (fab clips it). For a true 90 Ω USB
    pair, rename `USB_DM`/`USB_DP` → `USB_D-`/`USB_D+`, set the stackup, and use
    Route → Differential Pair + Tune Skew. (4 layers would let VBAT route wide too.)
-2. **GND copper pours** top + bottom, stitched with vias.
+2. ~~GND copper pours~~ — done (`pour_gnd.py`: all 4 layers + stitching vias).
 3. Nudge silkscreen, confirm the **antenna keep-out** is clear of copper and the
    module antenna overhangs the top edge, verify **edge connectors** (USB-C bottom,
    JST left, buttons right) sit flush at their edges.

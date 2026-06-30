@@ -47,7 +47,9 @@ def set_net_classes():
     print(f"net classes: {', '.join(NET_CLASSES)} + {len(patterns)} net assignments")
 
 # Board envelope (mm). Origin top-left; +x right, +y down (KiCad screen coords).
-BW, BH = 52.0, 47.0
+# Width 54 (not 52) leaves a right margin so SW1/SW2 button pads clear the edge
+# (copper_edge_clearance) without colliding with the strap resistors at x40.
+BW, BH = 54.0, 47.0
 # Offset so the board sits centred on the A4 (297x210mm) drawing sheet, not in the
 # top-left corner. PLACE coords below stay board-local (0..BW, 0..BH); OX/OY shift them.
 OX, OY = (297.0 - BW) / 2, (210.0 - BH) / 2   # = 122.5, 81.5
@@ -122,6 +124,7 @@ PLACE = {
 
 def main():
     board = pcbnew.LoadBoard(BRD)
+    board.SetCopperLayerCount(4)   # 4-layer: F / In1 / In2 / B (inner layers get GND pours)
 
     placed, missing = 0, []
     by_ref = {fp.GetReference(): fp for fp in board.GetFootprints()}

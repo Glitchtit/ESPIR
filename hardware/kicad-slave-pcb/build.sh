@@ -30,11 +30,21 @@ echo ">> 2. kinet2pcb: netlist -> .kicad_pcb"
 kinet2pcb -i espir_slave_pcb.net -o espir_slave_pcb.kicad_pcb -w --nobackup \
           --libraries "$FP"/*.pretty
 
-echo ">> 3. pcbnew: functional placement + board outline"
+echo ">> 3. pcbnew: 4-layer setup + functional placement + board outline + net classes"
 python place_and_outline.py
 
-echo ">> 4. DRC (expect: unconnected ratsnest = unrouted; no connectivity errors)"
+echo ">> 4. autoroute (Freerouting, 4-layer) — needs freerouting.jar (see route.sh)"
+[ -f "${FREEROUTING_JAR:-./freerouting.jar}" ] && ./route.sh || \
+  echo "   (skipped: no freerouting.jar; run route.sh once it's available)"
+
+echo ">> 5. GND pours (4 layers) + via stitching, then silkscreen cleanup"
+python pour_gnd.py
+python fix_silk.py
+
+echo ">> 6. DRC"
 kicad-cli pcb drc --exit-code-violations espir_slave_pcb.kicad_pcb \
           -o /tmp/espir_slave_drc.rpt || true
 grep -E 'Found .* violations|Found .* unconnected' /tmp/espir_slave_drc.rpt || true
-echo ">> done. Open espir_slave_pcb.kicad_pro in KiCad to route/pour."
+echo ">> done. NOTE: Freerouting is stochastic + EN/VSYS needs a manual jumper, so the"
+echo ">> committed espir_slave_pcb.kicad_pcb is the finished board; this pipeline regenerates"
+echo ">> an equivalent that may need the same minor hand-finishing."

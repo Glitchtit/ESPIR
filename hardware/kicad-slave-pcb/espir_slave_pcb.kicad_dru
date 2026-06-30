@@ -13,13 +13,9 @@
 
 # 1. Power distribution: >=0.5 mm copper for the 3.3 V / battery rails.
 (rule "power_min_width"
-	(condition "A.NetName == 'V3V3' || A.NetName == 'V5' || A.NetName == 'VSYS' || A.NetName == 'VCELL' || A.NetName == 'GND'")
+	(condition "A.NetName == 'V3V3' || A.NetName == 'V5' || A.NetName == 'VSYS' || A.NetName == 'VBAT' || A.NetName == 'VCELL' || A.NetName == 'GND'")
 	(constraint track_width (min 0.5mm)))
-# VBAT: charger output through a congested corner; 2-layer routing can't widen it
-# without clearance violations, so it keeps the default width (adequate for ~0.5A charge).
-(rule "vbat_min_width"
-	(condition "A.NetName == 'VBAT'")
-	(constraint track_width (min 0.2mm)))
+# (VBAT is wide like the other rails on this 4-layer board.)
 
 # 2. IR-LED drive net is a high-current pulsed path -> widen like power.
 (rule "ir_drive_width"
