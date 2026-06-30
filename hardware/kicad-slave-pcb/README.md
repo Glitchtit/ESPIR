@@ -103,31 +103,28 @@ pip install skidl kinet2pcb
   `.kicad_sch` and re-extracts the **exact same 25 multi-pin nets** as the SKiDL
   netlist (verified set-equal). The schematic is a faithful graphical view of the
   circuit.
-- **Routing (`route.sh` → Freerouting):** autorouted **~112 of 114** connections
-  (≈355 tracks, 25 vias; Freerouting varies run-to-run). The **Power/IR net classes route
-  the rails wide** (0.5 mm / 0.4 mm) — DRC `track_width` violations dropped from 199
-  (uniform-width route) to a handful once the net classes were carried into the DSN.
+- **Routing (`route.sh` → Freerouting):** **fully routed — 114/114 connections**
+  (540 tracks, 27 vias). The **main power rails route wide (0.5 mm)** via the Power net
+  class; **VBAT** keeps the default width in the congested charger corner (2-layer can't
+  widen it there without clearance violations — fine for ~0.5 A charge; see `.kicad_dru`).
 - **Module placement:** U5 sits with its body at the **top edge so the antenna and its
-  `tracks not_allowed` keep-out hang OFF the board** (y<0). Earlier the module was in the
-  interior, so the keep-out covered a band across the top where the IR LEDs (U2/U3) and
-  WS2812 (LED1) sat — making them **un-routable**; moving it to the edge cleared that
-  (the 19 keep-out DRC violations are gone and those nets now route).
-- **Board centred** on the A4 drawing sheet (148.5, 105 mm), not in the corner.
-- **Board (`kicad-cli pcb drc`):** remaining items are **2 unrouted** stubs plus auto-route
-  roughness (a few tracks near board edges) and pre-existing silkscreen placement items.
-  **No connectivity/circuit errors, no keep-out violations.**
+  `tracks not_allowed` keep-out hang OFF the board** (y<0) — otherwise the keep-out covers
+  the interior and the IR LEDs / WS2812 under it become un-routable.
+- **Board centred** on the A4 drawing sheet (~148.5, 105 mm), not in the corner.
+- **DRC (`kicad-cli pcb drc`): clean except 4 benign items.** 0 unconnected, 0 track-width,
+  0 clearance, 0 copper-edge-clearance. The only 4 left are `silk_edge_clearance` — U5's
+  antenna outline and USB-C's connector outline overhanging their board edges (by design;
+  fab clips edge silk). LED2/USBC1 silk refs are hidden (saturated cluster; still in BOM/CPL).
 
 ## Remaining work (the human finishing pass)
 
 Same division of labour the EasyEDA workflow uses — the circuit + a clean,
 function-grouped starting layout are done; the fab finishing is left to a human:
 
-1. **Finish routing** the last ~2 stubs by hand and pull a few tracks off the board
-   edge (`copper_edge_clearance`). The critical-signal rules in
-   `espir_slave_pcb.kicad_dru` (power ≥0.5 mm, IR-pulse ≥0.4 mm, sense taps ≥1 mm from
-   the IR drive, USB width) are DRC-enforced. For a true 90 Ω USB pair, rename
-   `USB_DM`/`USB_DP` → `USB_D-`/`USB_D+`, set the stackup, and use
-   Route → Differential Pair + Tune Skew.
+1. **Optional polish:** trim U5/USB-C footprint silk that overhangs the edges (the 4
+   benign `silk_edge_clearance`), or just leave it (fab clips it). For a true 90 Ω USB
+   pair, rename `USB_DM`/`USB_DP` → `USB_D-`/`USB_D+`, set the stackup, and use
+   Route → Differential Pair + Tune Skew. (4 layers would let VBAT route wide too.)
 2. **GND copper pours** top + bottom, stitched with vias.
 3. Nudge silkscreen, confirm the **antenna keep-out** is clear of copper and the
    module antenna overhangs the top edge, verify **edge connectors** (USB-C bottom,
