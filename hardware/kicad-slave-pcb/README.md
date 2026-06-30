@@ -37,6 +37,7 @@ espir_slave_pcb.py ─┤  (+ SKiDL ERC)
 | `pour_gnd.py`            | GND pours on all 4 layers + solid GND-pad connection + collision-checked via stitching. |
 | `fix_silk.py`            | Collision-aware silkscreen designator placement; hides refs with no clear spot. |
 | `en_jumper.py`           | Jumpers the LDO EN→VIN tie on B.Cu (boxed pins Freerouting can't tie). |
+| `mounting_and_round.py`  | Expand X (centred), round the corners (r=3 mm), add 4× M3 mounting holes. |
 | `espir_slave_pcb.kicad_pcb` | **4-layer** KiCad board: 38 footprints, **fully routed**, 0.5 mm power incl. VBAT, GND planes, centred on A4. |
 | `espir_slave_pcb.kicad_dru` | Critical-signal **routing rules** (power width, IR-pulse width, sense-vs-IR clearance, USB width) — DRC auto-enforces them. |
 | `espir_slave_pcb.kicad_pro` | KiCad project (open this). |
@@ -116,6 +117,8 @@ pip install skidl kinet2pcb
   keep-out hangs OFF the board** — otherwise it covers the interior and the parts under it
   can't route.
 - **Board centred** on the A4 drawing sheet (148.5, 105 mm).
+- **Mechanical: 66 × 47 mm, rounded corners (r=3 mm), 4× M3 mounting holes** in the
+  expanded left/right margins (clear of all components; GND pour isolates them).
 - **DRC (`kicad-cli pcb drc`): 0 electrical violations** — 0 unconnected, 0 track-width,
   0 clearance, 0 copper-edge, 0 shorts. Remaining: **4 `silk_edge_clearance`** (U5 antenna +
   USB-C outlines overhanging their edges, by design — fab clips edge silk) and **1
