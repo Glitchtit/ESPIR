@@ -1,0 +1,35 @@
+(version 1)
+
+# Critical-signal routing rules for the ESPIR slave PCB.
+# kicad-cli pcb drc (and the GUI) auto-load this file (named <board>.kicad_dru)
+# and enforce it. Rules follow the priority order in the kicad skill; sources are
+# IPC-2221/2152 (power width), Microchip doc7633 / SiLabs AN0046 (USB 90R diff),
+# TI AN-1149 / ADI (keep sense/feedback away from switching & pulse noise).
+#
+# NOTE: this module board has NO external crystal (internal to ESP32-C6-MINI-1)
+# and the AP2112K is a fixed LDO with no FB pin, so the crystal-guard-ring and
+# regulator-feedback rules don't apply here — the analogue is the high-Z ADC
+# sense taps kept clear of the pulsed IR-LED drive net (see sense_vs_ir below).
+
+# 1. Power distribution: >=0.5 mm copper for the 3.3 V / battery rails.
+(rule "power_min_width"
+	(condition "A.NetName == 'V3V3' || A.NetName == 'V5' || A.NetName == 'VSYS' || A.NetName == 'VBAT' || A.NetName == 'VCELL' || A.NetName == 'GND'")
+	(constraint track_width (min 0.5mm)))
+
+# 2. IR-LED drive net is a high-current pulsed path -> widen like power.
+(rule "ir_drive_width"
+	(condition "A.NetName == 'IRD'")
+	(constraint track_width (min 0.4mm)))
+
+# 3. Keep the high-impedance ADC sense taps away from the pulsed IR drive
+#    (the LDO-feedback-vs-switching-noise rule, applied to this board's nodes).
+(rule "sense_vs_ir_clearance"
+	(condition "(A.NetName == 'BATT_SENSE' || A.NetName == 'VBUS_SENSE') && B.NetName == 'IRD'")
+	(constraint clearance (min 1.0mm)))
+
+# 4. USB D+/D- width template (90 ohm needs stackup-calculated width/gap + a
+#    real differential pair: rename USB_DM/USB_DP -> USB_D-/USB_D+ so KiCad pairs
+#    them, then Route > Differential Pair + Tune Skew, matched <= 0.15 mm).
+(rule "usb_min_width"
+	(condition "A.NetName == 'USB_DP' || A.NetName == 'USB_DM'")
+	(constraint track_width (min 0.2mm) (opt 0.25mm)))
