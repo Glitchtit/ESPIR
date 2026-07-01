@@ -60,7 +60,6 @@ void app_main(void)
         .gpio_g       = CONFIG_ESPIR_LED_G_GPIO,
         .gpio_b       = CONFIG_ESPIR_LED_B_GPIO,
         .common_anode = common_anode,
-        .vbus_gpio    = CONFIG_ESPIR_LED_VBUS_GPIO,
     };
     ESP_ERROR_CHECK(espir_led_init(&led));
     espir_led_set(ESPIR_LED_SEARCHING);          /* show "searching" from boot until joined */

@@ -61,16 +61,6 @@ config ESPIR_LED_COMMON_ANODE
         Common-anode LEDs share the positive pin and light when the GPIO is driven LOW, so the
         firmware inverts the PWM duty. Common-cathode LEDs share GND and light on a HIGH GPIO.
 
-config ESPIR_LED_VBUS_GPIO
-    int "USB-present (VBUS) sense GPIO; -1 disables USB gating (XIAO D1 = GPIO1)"
-    default 1
-    range -1 23
-    help
-        Digital input that reads HIGH when USB power is present (via a divider from the XIAO 5V
-        pad). The solid-green CONNECTED state lights only while USB is detected, so a steady LED
-        can't drain the LiPo on a sleepy end device. Set to -1 to disable USB gating entirely
-        (green stays lit on battery too — expect days, not months, of battery life).
-
 endmenu
 
 endmenu
