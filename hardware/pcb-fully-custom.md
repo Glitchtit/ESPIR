@@ -163,3 +163,28 @@ USB-native flashing); populate one antenna (R3 *xor* R4); the human finishing pa
   solder-wicking — done on the footprint, not just a single stitching via.
 - 4-layer stack with inner GND; chip-antenna copper keep-out before pouring; net-class widths for
   power/IR/RF; auto-routed then hand-finished.
+
+## Flashing (sleepy end device — mind the wake window)
+
+Flashing is over the bare C6's **native USB-Serial-JTAG** (`USB_DM→GPIO12`, `USB_DP→GPIO13` to
+USB-C) — no UART bridge. As a Zigbee **sleepy end device** the serial only answers for a brief
+window right after a reset, so a plain `idf.py flash` usually fails with `OSError: [Errno 71]
+Protocol error` (esptool toggling RTS on the CDC-ACM link and/or the chip asleep); `--before`
+tweaks don't help.
+
+Reliable method — loop `write_flash` and reset the board so an attempt lands in the wake window.
+From the app's `build` dir:
+
+```sh
+. ~/esp/esp-idf/export.sh
+while true; do
+  python -m esptool --chip esp32c6 -p /dev/ttyACM0 -b 460800 \
+    --before default_reset --after hard_reset --connect-attempts 1 \
+    write_flash @flash_args && break
+  sleep 0.3
+done
+```
+
+Holding **BOOT** while tapping **RESET** forces ROM download mode = unlimited window. This wired
+flash is a one-time step onto the OTA dual-slot layout; afterwards updates go wireless via Zigbee
+OTA (`AGENTS.md` → *OTA release*).

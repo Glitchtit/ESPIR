@@ -236,6 +236,31 @@ Connections (defaults — `menuconfig` → ESPIR Configuration → *RGB status L
   If that isn't enough, the optional 3.3 V→5 V boost from the Notes above can feed `VBAT` of the
   LED leg (the GPIO/MOSFET gate stays at 3.3 V) — resize R1/R2 for the higher rail.
 
+### Flashing (sleepy end device — mind the wake window)
+
+The XIAO C6 exposes only the **native USB-Serial-JTAG** (no UART bridge), and once the firmware
+runs it's a Zigbee **sleepy end device** — the serial only answers for a brief window right after
+a reset. A plain `idf.py -p /dev/ttyACM0 flash` usually fails with `OSError: [Errno 71] Protocol
+error` (esptool's `default_reset` toggles RTS on the CDC-ACM link, and/or the chip is already
+asleep); changing `--before` does not help.
+
+Reliable method — hammer `write_flash` in a loop, then reset the board so an attempt lands in the
+wake window (usually within a few dozen tries). From `slave-pcb/build`:
+
+```sh
+. ~/esp/esp-idf/export.sh
+while true; do
+  python -m esptool --chip esp32c6 -p /dev/ttyACM0 -b 460800 \
+    --before default_reset --after hard_reset --connect-attempts 1 \
+    write_flash @flash_args && break
+  sleep 0.3
+done
+```
+
+Holding **BOOT** while tapping **RESET** forces ROM download mode = unlimited window (cleanest if
+the loop keeps missing). This wired flash is a one-time step to get onto the OTA dual-slot layout;
+afterwards updates go wireless via Zigbee OTA (`AGENTS.md` → *OTA release*).
+
 ### Netlist (refdes + nets)
 
 A full connection list for laying out / ERC-checking the board, using the same refdes as the
